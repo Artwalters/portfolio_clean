@@ -48,7 +48,7 @@ window.addEventListener('resize', eventHandlers.resize)
 const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
 // Adjust camera position based on device width
 const isMobile = window.innerWidth <= 768
-const cameraZ = isMobile ? 5 : 3  // Mobile further back, desktop normal
+const cameraZ = isMobile ? 4 : 3  // Mobile slightly closer, desktop normal
 camera.position.z = cameraZ
 const baseCameraZ = cameraZ
 scene.add(camera)
@@ -179,15 +179,19 @@ let targetCameraZoom = baseCameraZ
 // Mouse wheel control
 eventHandlers.wheel = (event) => {
     const scrollIntensity = Math.abs(event.deltaY)
+    const isMobile = window.innerWidth <= 768
     
     // Simple scroll behavior
     targetScrollDirection = event.deltaY > 0 ? -1 : 1
     
+    // Mobile gets faster scroll speeds
+    const mobileMultiplier = isMobile ? 2.5 : 1
+    
     if (scrollIntensity > 50) {
         const scaledIntensity = Math.pow((scrollIntensity - 50) / 100, 1.5)
-        targetScrollSpeed = Math.min(scaledIntensity * 0.005, 0.05)
+        targetScrollSpeed = Math.min(scaledIntensity * 0.005 * mobileMultiplier, 0.05 * mobileMultiplier)
     } else {
-        targetScrollSpeed = Math.min(scrollIntensity * 0.0001, 0.005)
+        targetScrollSpeed = Math.min(scrollIntensity * 0.0001 * mobileMultiplier, 0.005 * mobileMultiplier)
     }
 }
 
@@ -211,15 +215,18 @@ eventHandlers.touchmove = (event) => {
     
     // Calculate swipe intensity with threshold and exponential scaling
     const swipeIntensity = Math.abs(deltaX)
-    const threshold = 20 // Minimum swipe needed for effect
+    const threshold = 15 // Lower threshold for more responsive touch
+    
+    // Much faster touch scrolling on mobile
+    const touchMultiplier = 3
     
     if (swipeIntensity > threshold) {
         // Exponential scaling for harder swiping = much faster movement
-        const scaledIntensity = Math.pow((swipeIntensity - threshold) / 50, 1.5)
-        targetScrollSpeed = Math.min(scaledIntensity * 0.005, 0.05) // Higher cap max speed
+        const scaledIntensity = Math.pow((swipeIntensity - threshold) / 40, 1.5)
+        targetScrollSpeed = Math.min(scaledIntensity * 0.008 * touchMultiplier, 0.08 * touchMultiplier)
     } else {
-        // Set small speed for zoom detection even below threshold
-        targetScrollSpeed = Math.min(swipeIntensity * 0.0002, 0.005)
+        // Set higher speed even below threshold
+        targetScrollSpeed = Math.min(swipeIntensity * 0.0004 * touchMultiplier, 0.008 * touchMultiplier)
     }
     
     touchStartX = touchX
@@ -264,12 +271,16 @@ eventHandlers.mousemove = (event) => {
     if (isDragging) {
         const deltaX = dragStartX - event.clientX
         const dragIntensity = Math.abs(deltaX)
+        const isMobile = window.innerWidth <= 768
+        
+        // Mobile gets much faster drag
+        const dragMultiplier = isMobile ? 4 : 1
         
         // Subtle but responsive drag
         if (dragIntensity > 3) {
             targetScrollDirection = deltaX > 0 ? 1 : -1
             // More responsive than before but still gentle
-            targetScrollSpeed = Math.min(dragIntensity * 0.0002, 0.015) // More responsive
+            targetScrollSpeed = Math.min(dragIntensity * 0.0002 * dragMultiplier, 0.015 * dragMultiplier)
         }
         
         dragStartX = event.clientX
