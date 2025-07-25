@@ -4,7 +4,7 @@ import glsl from 'vite-plugin-glsl'
 export default {
     root: 'src/',
     publicDir: '../static/',
-    base: './',
+    base: '/portfolio_clean/',
     server:
     {
         host: true, // Open to local network and display URL
