@@ -184,14 +184,18 @@ eventHandlers.wheel = (event) => {
     // Simple scroll behavior
     targetScrollDirection = event.deltaY > 0 ? -1 : 1
     
-    // Mobile gets much faster scroll speeds
-    const mobileMultiplier = isMobile ? 5 : 1
-    
-    if (scrollIntensity > 50) {
-        const scaledIntensity = Math.pow((scrollIntensity - 50) / 100, 1.5)
-        targetScrollSpeed = Math.min(scaledIntensity * 0.005 * mobileMultiplier, 0.05 * mobileMultiplier)
+    if (isMobile) {
+        // Mobile: simpler, more predictable scrolling
+        const baseSpeed = scrollIntensity * 0.0008
+        targetScrollSpeed = Math.min(baseSpeed, 0.04)
     } else {
-        targetScrollSpeed = Math.min(scrollIntensity * 0.0001 * mobileMultiplier, 0.005 * mobileMultiplier)
+        // Desktop: original complex scaling
+        if (scrollIntensity > 50) {
+            const scaledIntensity = Math.pow((scrollIntensity - 50) / 100, 1.5)
+            targetScrollSpeed = Math.min(scaledIntensity * 0.005, 0.05)
+        } else {
+            targetScrollSpeed = Math.min(scrollIntensity * 0.0001, 0.005)
+        }
     }
 }
 
@@ -213,21 +217,12 @@ eventHandlers.touchmove = (event) => {
     // Set target direction based on swipe direction
     targetScrollDirection = deltaX > 0 ? 1 : -1
     
-    // Calculate swipe intensity with threshold and exponential scaling
+    // Simpler, smoother touch scrolling for mobile
     const swipeIntensity = Math.abs(deltaX)
-    const threshold = 10 // Very low threshold for instant response
     
-    // Much faster touch scrolling on mobile
-    const touchMultiplier = 6
-    
-    if (swipeIntensity > threshold) {
-        // Exponential scaling for harder swiping = much faster movement
-        const scaledIntensity = Math.pow((swipeIntensity - threshold) / 40, 1.5)
-        targetScrollSpeed = Math.min(scaledIntensity * 0.008 * touchMultiplier, 0.08 * touchMultiplier)
-    } else {
-        // Set higher speed even below threshold
-        targetScrollSpeed = Math.min(swipeIntensity * 0.0004 * touchMultiplier, 0.008 * touchMultiplier)
-    }
+    // Direct proportional speed - no complex scaling
+    const baseSpeed = swipeIntensity * 0.002
+    targetScrollSpeed = Math.min(baseSpeed, 0.06)
     
     touchStartX = touchX
 }
@@ -273,14 +268,17 @@ eventHandlers.mousemove = (event) => {
         const dragIntensity = Math.abs(deltaX)
         const isMobile = window.innerWidth <= 768
         
-        // Mobile gets much faster drag
-        const dragMultiplier = isMobile ? 8 : 1
-        
-        // Subtle but responsive drag
-        if (dragIntensity > 1) {
+        // Smooth drag for all devices
+        if (dragIntensity > 2) {
             targetScrollDirection = deltaX > 0 ? 1 : -1
-            // More responsive than before but still gentle
-            targetScrollSpeed = Math.min(dragIntensity * 0.0002 * dragMultiplier, 0.015 * dragMultiplier)
+            
+            if (isMobile) {
+                // Mobile: more responsive drag
+                targetScrollSpeed = Math.min(dragIntensity * 0.001, 0.03)
+            } else {
+                // Desktop: subtle drag
+                targetScrollSpeed = Math.min(dragIntensity * 0.0002, 0.015)
+            }
         }
         
         dragStartX = event.clientX
@@ -511,10 +509,10 @@ const tick = () => {
         mouseHasMoved = false
     }
     
-    // Faster interpolation on mobile for more responsive feel
+    // Balanced interpolation for smooth feel
     const isMobileInterp = window.innerWidth <= 768
-    const speedInterp = isMobileInterp ? 0.08 : 0.02
-    const directionInterp = isMobileInterp ? 0.04 : 0.01
+    const speedInterp = isMobileInterp ? 0.05 : 0.02
+    const directionInterp = isMobileInterp ? 0.03 : 0.01
     
     // Smooth interpolation to target speed
     scrollSpeed += (targetScrollSpeed - scrollSpeed) * speedInterp
@@ -544,9 +542,9 @@ const tick = () => {
         }
     })
     
-    // Faster deceleration on mobile for snappier response
+    // Smooth deceleration for natural feel
     const isMobileDecel = window.innerWidth <= 768
-    const deceleration = isMobileDecel ? 0.95 : 0.98
+    const deceleration = isMobileDecel ? 0.97 : 0.98
     targetScrollSpeed *= deceleration
     
     // Render
