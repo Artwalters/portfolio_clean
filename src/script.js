@@ -76,7 +76,7 @@ const loadPromises = []
 for(let i = 1; i <= imageCount; i++) {
     const promise = new Promise((resolve) => {
         const texture = textureLoader.load(
-            `./img/project-${i}.png`,
+            `./project-${i}.png`,
             (texture) => {
                 texture.generateMipmaps = false
                 texture.minFilter = THREE.LinearFilter
