@@ -184,8 +184,8 @@ eventHandlers.wheel = (event) => {
     // Simple scroll behavior
     targetScrollDirection = event.deltaY > 0 ? -1 : 1
     
-    // Mobile gets faster scroll speeds
-    const mobileMultiplier = isMobile ? 2.5 : 1
+    // Mobile gets much faster scroll speeds
+    const mobileMultiplier = isMobile ? 5 : 1
     
     if (scrollIntensity > 50) {
         const scaledIntensity = Math.pow((scrollIntensity - 50) / 100, 1.5)
@@ -215,10 +215,10 @@ eventHandlers.touchmove = (event) => {
     
     // Calculate swipe intensity with threshold and exponential scaling
     const swipeIntensity = Math.abs(deltaX)
-    const threshold = 15 // Lower threshold for more responsive touch
+    const threshold = 10 // Very low threshold for instant response
     
     // Much faster touch scrolling on mobile
-    const touchMultiplier = 3
+    const touchMultiplier = 6
     
     if (swipeIntensity > threshold) {
         // Exponential scaling for harder swiping = much faster movement
@@ -274,10 +274,10 @@ eventHandlers.mousemove = (event) => {
         const isMobile = window.innerWidth <= 768
         
         // Mobile gets much faster drag
-        const dragMultiplier = isMobile ? 4 : 1
+        const dragMultiplier = isMobile ? 8 : 1
         
         // Subtle but responsive drag
-        if (dragIntensity > 3) {
+        if (dragIntensity > 1) {
             targetScrollDirection = deltaX > 0 ? 1 : -1
             // More responsive than before but still gentle
             targetScrollSpeed = Math.min(dragIntensity * 0.0002 * dragMultiplier, 0.015 * dragMultiplier)
@@ -511,11 +511,16 @@ const tick = () => {
         mouseHasMoved = false
     }
     
-    // Very smooth interpolation to target speed
-    scrollSpeed += (targetScrollSpeed - scrollSpeed) * 0.02
+    // Faster interpolation on mobile for more responsive feel
+    const isMobileInterp = window.innerWidth <= 768
+    const speedInterp = isMobileInterp ? 0.08 : 0.02
+    const directionInterp = isMobileInterp ? 0.04 : 0.01
     
-    // Very smooth interpolation to target direction
-    scrollDirection += (targetScrollDirection - scrollDirection) * 0.01
+    // Smooth interpolation to target speed
+    scrollSpeed += (targetScrollSpeed - scrollSpeed) * speedInterp
+    
+    // Smooth interpolation to target direction
+    scrollDirection += (targetScrollDirection - scrollDirection) * directionInterp
     
     // Combine auto scroll with user scroll, apply direction
     const currentSpeed = (autoScrollSpeed + scrollSpeed) * scrollDirection
@@ -539,8 +544,10 @@ const tick = () => {
         }
     })
     
-    // Very smooth scroll deceleration
-    targetScrollSpeed *= 0.98
+    // Faster deceleration on mobile for snappier response
+    const isMobileDecel = window.innerWidth <= 768
+    const deceleration = isMobileDecel ? 0.95 : 0.98
+    targetScrollSpeed *= deceleration
     
     // Render
     renderer.render(scene, camera)
