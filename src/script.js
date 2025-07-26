@@ -17,8 +17,8 @@ class SimplePixiSlider {
     
     this.el = el;
     this.opts = Object.assign({
-      speed: 2,
-      ease: 0.075
+      speed: store.isDevice ? 1.5 : 2,
+      ease: store.isDevice ? 0.1 : 0.075
     }, opts);
 
     this.ui = {
@@ -68,14 +68,14 @@ class SimplePixiSlider {
   }
 
   async setupPixi() {
-    // Create PIXI application
+    // Create PIXI application with mobile optimizations
     this.app = new PIXI.Application();
     await this.app.init({
       width: store.ww,
       height: store.wh,
       backgroundAlpha: 0,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
+      antialias: !store.isDevice, // Disable on mobile for performance
+      resolution: store.isDevice ? 1 : (window.devicePixelRatio || 1),
       autoDensity: true
     });
 
@@ -216,7 +216,8 @@ class SimplePixiSlider {
         this.container.addChild(sprite);
         
         // Calculate initial position for modulus wrapping
-        const initialX = i * (width + 50); // Simple spacing
+        const spacing = store.isDevice ? 30 : 50;
+        const initialX = i * (width + spacing);
         
         // Push to cache
         this.items.push({
@@ -242,7 +243,7 @@ class SimplePixiSlider {
     
     // Update displacement filter scale based on scroll speed and direction
     if (this.displacementFilter) {
-      const intensity = 8; // More subtle effect
+      const intensity = store.isDevice ? 4 : 8; // Less intense on mobile
       const scaleValue = intensity * state.direction * Math.abs(scroll);
       this.displacementFilter.scale.x = scaleValue;
       this.displacementFilter.scale.y = 0;
@@ -274,7 +275,8 @@ class SimplePixiSlider {
   getContainerWidth() {
     // Calculate total width needed for seamless loop
     if (this.items.length === 0) return store.ww;
-    return this.items.length * (this.items[0].width + 50);
+    const spacing = store.isDevice ? 30 : 50;
+    return this.items.length * (this.items[0].width + spacing);
   }
   
   getPos({ changedTouches, clientX, clientY, target }) {
@@ -319,9 +321,9 @@ class SimplePixiSlider {
   on() {
     const { move, up, down } = this.events;
     
-    window.addEventListener(down, this.onDown);
-    window.addEventListener(move, this.onMove);
-    window.addEventListener(up, this.onUp);
+    window.addEventListener(down, this.onDown, { passive: false });
+    window.addEventListener(move, this.onMove, { passive: false });
+    window.addEventListener(up, this.onUp, { passive: false });
   }
 
   off() {
@@ -344,13 +346,14 @@ class SimplePixiSlider {
       this.ui.projectItems[index].classList.add('highlighted');
     }
     
-    // Start fade in after 1 second delay
+    // Start fade in after delay (shorter on mobile for better UX)
+    const delay = store.isDevice ? 500 : 1000;
     this.fadeTimeout = setTimeout(() => {
       this.updateProjectDescription(index);
       if (this.ui.projectDescription) {
         this.ui.projectDescription.classList.add('visible');
       }
-    }, 1000);
+    }, delay);
   }
 
   onProjectOut(index) {
