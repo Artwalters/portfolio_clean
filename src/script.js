@@ -45,7 +45,7 @@ window.addEventListener('resize', eventHandlers.resize)
 /**
  * Camera
  */
-const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height, 0.1, 100)
+const camera = new THREE.PerspectiveCamera(65, sizes.width / sizes.height, 0.01, 1000)
 // Adjust camera position based on device width
 const isMobile = window.innerWidth <= 768
 const cameraZ = isMobile ? 4 : 3  // Mobile slightly closer, desktop normal
@@ -63,6 +63,7 @@ const renderer = new THREE.WebGLRenderer({
 })
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+renderer.setClearColor(0x0a0a0a, 1)
 
 /**
  * Textures
@@ -107,6 +108,46 @@ const CONFIG = {
 }
 
 /**
+ * Shader Materials
+ */
+const vertexShader = `
+    uniform float uVelo;
+    
+    varying vec2 vUv;
+    
+    #define M_PI 3.1415926535897932384626433832795
+    
+    void main() {
+        vUv = uv;
+        vec3 pos = position;
+        
+        // Sine wave distortion based on velocity - creates rubber stretch effect
+        pos.x = pos.x + ((sin(uv.y * M_PI) * uVelo) * 1.0);
+        
+        // Visible but smooth z-depth for 3D effect
+        pos.z = sin(uv.y * M_PI) * abs(uVelo) * 0.3;
+        
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    }
+`;
+
+const fragmentShader = `
+    uniform sampler2D uTexture;
+    uniform float uVelo;
+    
+    varying vec2 vUv;
+    
+    void main() {
+        vec2 uv = vUv;
+        
+        // Simple texture sampling without RGB splitting
+        vec4 color = texture2D(uTexture, uv);
+        
+        gl_FragColor = color;
+    }
+`;
+
+/**
  * Geometry Cache
  */
 const geometryCache = new Map()
@@ -114,7 +155,8 @@ const geometryCache = new Map()
 function getOrCreateGeometry(width, height) {
     const key = `${width.toFixed(3)}_${height.toFixed(3)}`
     if (!geometryCache.has(key)) {
-        geometryCache.set(key, new THREE.PlaneGeometry(width, height))
+        // Increase subdivisions for smooth warping
+        geometryCache.set(key, new THREE.PlaneGeometry(width, height, 32, 32))
     }
     return geometryCache.get(key)
 }
@@ -143,9 +185,16 @@ Promise.all(loadPromises).then(() => {
             const planeWidth = CONFIG.PLANE_HEIGHT * imageData.aspectRatio
             const planeGeometry = getOrCreateGeometry(planeWidth, CONFIG.PLANE_HEIGHT)
             
-            const material = new THREE.MeshBasicMaterial({
-                map: imageData.texture,
-                side: THREE.DoubleSide
+            // Create shader material with uniforms
+            const material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTexture: { value: imageData.texture },
+                    uVelo: { value: 0 }
+                },
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                side: THREE.DoubleSide,
+                transparent: true
             })
             
             const plane = new THREE.Mesh(planeGeometry, material)
@@ -155,7 +204,8 @@ Promise.all(loadPromises).then(() => {
             planes.push({
                 mesh: plane,
                 width: planeWidth,
-                projectId: index + 1 // Project 1-9
+                projectId: index + 1, // Project 1-9
+                material: material // Store material reference for uniform updates
             })
             scene.add(plane)
         })
@@ -483,8 +533,21 @@ function navigateToProject(projectId) {
  */
 const clock = new THREE.Clock()
 
+// Variable to track velocity
+let velocity = 0
+let smoothVelocity = 0
+
 const tick = () => {
     const elapsedTime = clock.getElapsedTime()
+    
+    // Update shader uniforms for all planes (moved up to be before other calculations)
+    planes.forEach((planeData) => {
+        if (planeData.material && planeData.material.uniforms) {
+            // Update velocity uniform
+            planeData.material.uniforms.uVelo.value = velocity
+        }
+    })
+    
     
     // Hover detection (only when mouse has moved)
     if (mouseHasMoved) {
@@ -509,10 +572,10 @@ const tick = () => {
         mouseHasMoved = false
     }
     
-    // Balanced interpolation for smooth feel
+    // Very smooth interpolation for gradual acceleration
     const isMobileInterp = window.innerWidth <= 768
-    const speedInterp = isMobileInterp ? 0.08 : 0.1
-    const directionInterp = isMobileInterp ? 0.03 : 0.04
+    const speedInterp = isMobileInterp ? 0.03 : 0.04
+    const directionInterp = isMobileInterp ? 0.015 : 0.02
     
     // Smooth interpolation to target speed
     scrollSpeed += (targetScrollSpeed - scrollSpeed) * speedInterp
@@ -524,6 +587,20 @@ const tick = () => {
     
     // Combine auto scroll with user scroll, apply direction
     const currentSpeed = (autoScrollSpeed + scrollSpeed) * scrollDirection
+    
+    // Calculate velocity based on currentSpeed which already handles direction
+    const currentVelocity = currentSpeed * -3.0 // Negative because planes move opposite to scroll
+    
+    // Smooth velocity to avoid sudden changes
+    smoothVelocity += (currentVelocity - smoothVelocity) * 0.08
+    
+    // Final velocity with decay
+    velocity = smoothVelocity
+    
+    // Natural decay when not moving
+    if (Math.abs(currentSpeed) < 0.0001) {
+        velocity *= 0.985
+    }
     
     // Update plane positions
     planes.forEach((planeData) => {
