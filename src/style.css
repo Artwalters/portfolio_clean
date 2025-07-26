@@ -1,3 +1,10 @@
+@font-face {
+  font-family: 'PSTimesTrial';
+  src: url('./fonts/PSTimesTrial-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 html, body{
   height: 100%;
 }
@@ -5,8 +12,8 @@ html, body{
 body{
   position: relative;
   overflow: hidden;
-  background-color: #111;
-  font-family: 'helvetica neue', sans-serif;
+  background-color: #fff;
+  font-family: 'PSTimesTrial', serif;
 }
 
 * {
@@ -107,8 +114,8 @@ body{
 .slide__inner{
   position: relative;
   overflow: hidden;
-  width: 55vw;
-  padding-top: 56.5%;
+  width: 18vw;
+  padding-top: 18vw;
 }
 
 .slide img{
@@ -183,16 +190,17 @@ body{
 
 .ui-overlay > div {
     position: absolute;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(0, 0, 0, 0.8);
     font-size: 18px;
     font-weight: 300;
     letter-spacing: 0.5px;
     text-transform: lowercase;
 }
 
-.ui-top-left {
+.ui-overlay .ui-top-left {
     top: 60px;
     left: 60px;
+    font-size: 36px;
 }
 
 .ui-top-center {
@@ -241,25 +249,40 @@ body{
 }
 
 .project-description {
-    font-size: 15px;
+    font-size: 16px;
     opacity: 0;
-    line-height: 1.4;
-    transition: opacity 2.5s cubic-bezier(0.25, 0.1, 0.25, 1);
-    flex: 1;
+    line-height: 1.6;
+    transition: opacity 1s cubic-bezier(0.25, 0.1, 0.25, 1);
     word-wrap: break-word;
     overflow-wrap: break-word;
+    max-width: 500px;
 }
 
 .project-description.visible {
     opacity: 0.7;
 }
 
+.project-title {
+    font-size: 22px;
+    font-weight: 400;
+    margin-bottom: 12px;
+    color: rgba(0, 0, 0, 0.95);
+    letter-spacing: 0.5px;
+}
+
+.project-details {
+    font-size: 14px;
+    color: rgba(0, 0, 0, 0.7);
+    line-height: 1.5;
+    margin: 0;
+}
+
 .ui-bottom-center {
     bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
-    width: 33.333%;
-    text-align: center;
+    width: 40%;
+    text-align: left;
 }
 
 .ui-bottom-right {

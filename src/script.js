@@ -1,4 +1,4 @@
-// Remove imports - using CDN versions
+// Simple PIXI.js slider based on modulus concept
 const store = {
   ww: window.innerWidth,
   wh: window.innerHeight,
@@ -11,464 +11,430 @@ const store = {
   || navigator.userAgent.match(/Windows Phone/i)
 }
 
-class Slider {
-
+class SimplePixiSlider {
   constructor(el, opts = {}) {
-    this.bindAll()
-
-    this.el = el
-
+    this.bindAll();
+    
+    this.el = el;
     this.opts = Object.assign({
       speed: 2,
-      threshold: 50,
       ease: 0.075
-    }, opts)
+    }, opts);
 
     this.ui = {
       items: this.el.querySelectorAll('.js-slide'),
-      titles: document.querySelectorAll('.js-title'),
-      lines: document.querySelectorAll('.js-progress-line')
-    }
+      projectItems: document.querySelectorAll('.project-item'),
+      projectTitle: document.querySelector('.project-title'),
+      projectDetails: document.querySelector('.project-details'),
+      projectDescription: document.querySelector('.project-description')
+    };
 
     this.state = {
       target: 0,
       current: 0,
-      currentRounded: 0,
-      y: 0,
-      on: {
-        x: 0,
-        y: 0
-      },
+      direction: 0,
+      on: { x: 0, y: 0 },
       off: 0,
-      progress: 0,
-      diff: 0,
-      max: 0,
-      min: 0,
-      snap: {
-        points: []
-      },
-      flags: {
-        dragging: false
-      }
-    }
+      flags: { dragging: false }
+    };
 
-    this.items = []
+    this.items = [];
+    this.hoverTimeout = null;
+    this.fadeTimeout = null;
     
     this.events = {
       move: store.isDevice ? 'touchmove' : 'mousemove',
       up: store.isDevice ? 'touchend' : 'mouseup',
       down: store.isDevice ? 'touchstart' : 'mousedown'
-    }
+    };
     
-    this.init()
+    this.init();
   }
   
   bindAll() {
     ['onDown', 'onMove', 'onUp']
-    .forEach(fn => this[fn] = this[fn].bind(this))
+    .forEach(fn => this[fn] = this[fn].bind(this));
   }
 
-  init() {
-    return gsap.utils.pipe(
-      this.setup(), 
-      this.on()
-    )
+  async init() {
+    await this.setupPixi();
+    this.setup();
+    this.on();
+    
+    // Description starts hidden
+    if (this.ui.projectDescription) {
+      this.ui.projectDescription.classList.remove('visible');
+    }
   }
 
-  destroy() {
-    this.off()
-    this.state = null
-    this.items = null
-    this.opts = null
-    this.ui = null
+  async setupPixi() {
+    // Create PIXI application
+    this.app = new PIXI.Application();
+    await this.app.init({
+      width: store.ww,
+      height: store.wh,
+      backgroundAlpha: 0,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true
+    });
+
+    // Add canvas to DOM
+    this.app.canvas.style.position = 'fixed';
+    this.app.canvas.style.top = '0';
+    this.app.canvas.style.left = '0';
+    this.app.canvas.style.width = '100%';
+    this.app.canvas.style.height = '100%';
+    this.app.canvas.style.pointerEvents = 'none';
+    this.app.canvas.style.zIndex = '1';
+    document.body.appendChild(this.app.canvas);
+
+    // Create container for slides
+    this.container = new PIXI.Container();
+    this.app.stage.addChild(this.container);
+
+    // Load textures
+    this.textures = await this.loadTextures();
+    
+    // Add displacement filter
+    this.addDisplacementFilter();
   }
 
-  on() {
-    const { move, up, down } = this.events
-    
-    window.addEventListener(down, this.onDown)
-    window.addEventListener(move, this.onMove)
-    window.addEventListener(up, this.onUp)
-  }
+  async loadTextures() {
+    const imageUrls = [
+      './img/project-1.png',
+      './img/project-2.png',
+      './img/project-3.png',
+      './img/project-4.png',
+      './img/project-5.png',
+      './img/project-6.png',
+      './img/project-7.png'
+    ];
 
-  off() {
-    const { move, up, down } = this.events
-    
-    window.removeEventListener(down, this.onDown)
-    window.removeEventListener(move, this.onMove)
-    window.removeEventListener(up, this.onUp)
-  }
-  
-  setup() {
-    const { ww } = store
-    const state = this.state
-    const { items, titles } = this.ui
-    
-    const { 
-      width: wrapWidth, 
-      left: wrapDiff 
-    } = this.el.getBoundingClientRect()
-    
-    // Set bounding
-    state.max = -(items[items.length - 1].getBoundingClientRect().right - wrapWidth - wrapDiff)
-    state.min = 0
-    
-    // Global timeline
-    this.tl = gsap.timeline({ 
-      paused: true,
-      defaults: {
-        duration: 1,
-        ease: 'linear'
+    const textures = {};
+    for (let i = 0; i < imageUrls.length; i++) {
+      const url = imageUrls[i];
+      try {
+        const texture = await PIXI.Assets.load(url);
+        // Store texture with both relative and absolute URL
+        textures[url] = texture;
+        
+        // Create absolute URL to match what img.src will be
+        const absoluteUrl = new URL(url, window.location.href).href;
+        textures[absoluteUrl] = texture;
+      } catch (error) {
+        console.warn(`Failed to load texture: ${url}`, error);
       }
-    })
-    .fromTo('.js-progress-line-2', {
-      scaleX: 1
-    }, {
-      scaleX: 0,
-      duration: 0.5,
-      ease: 'power3'
-    }, 0)
-    .fromTo('.js-titles', {
-      yPercent: 0
-    }, {
-      yPercent: -(100 - (100 / titles.length)),
-    }, 0)
-    .fromTo('.js-progress-line', {
-      scaleX: 0
-    }, {
-      scaleX: 1
-    }, 0)
-    
-    // Cache stuff
-    for (let i = 0; i < items.length; i++) {
-      const el = items[i]
-      const { left, right, width } = el.getBoundingClientRect()
-      
-      // Create webgl plane
-      const plane = new Plane()
-      plane.init(el)
-      
-      // Timeline that plays when visible
-      const tl = gsap.timeline({ paused: true })
-      .fromTo(plane.mat.uniforms.uScale, {
-        value: 0.65
-      }, {
-        value: 1,
-        duration: 1,
-        ease: 'linear'
-      })
+    }
+    return textures;
+  }
 
-      // Push to cache
-      this.items.push({
-        el, plane,
-        left, right, width,
-        min: left < ww ? (ww * 0.775) : -(ww * 0.225 - wrapWidth * 0.2),
-        max: left > ww ? state.max - (ww * 0.775) : state.max + (ww * 0.225 - wrapWidth * 0.2),
-        tl,
-        out: false
-      })
+  addDisplacementFilter() {
+    // Create a simple noise texture as fallback
+    this.createNoiseTexture();
+  }
+
+  createNoiseTexture() {
+    // Create canvas for noise texture
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    
+    // Generate perlin-like noise
+    const imageData = ctx.createImageData(512, 512);
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      const x = (i / 4) % 512;
+      const y = Math.floor((i / 4) / 512);
+      
+      // Create wave pattern for better displacement
+      const value1 = Math.sin(x * 0.01) * 127 + 128;
+      const value2 = Math.cos(y * 0.01) * 127 + 128;
+      const noise = (value1 + value2) / 2;
+      
+      imageData.data[i] = noise;     // R
+      imageData.data[i + 1] = noise; // G  
+      imageData.data[i + 2] = noise; // B
+      imageData.data[i + 3] = 255;   // A
+    }
+    ctx.putImageData(imageData, 0, 0);
+    
+    // Create PIXI texture from canvas
+    const texture = PIXI.Texture.from(canvas);
+    this.displacementSprite = new PIXI.Sprite(texture);
+    
+    // Make it repeat
+    this.displacementSprite.texture.baseTexture.wrapMode = PIXI.WRAP_MODES.REPEAT;
+    
+    // Scale to cover screen
+    const scale = Math.max(store.ww / 512, store.wh / 512);
+    this.displacementSprite.scale.set(scale);
+    
+    // Create displacement filter
+    this.displacementFilter = new PIXI.DisplacementFilter(this.displacementSprite);
+    this.displacementFilter.scale.x = 0;
+    this.displacementFilter.scale.y = 0;
+    
+    // Apply filter to container
+    this.container.filters = [this.displacementFilter];
+    
+    // Add displacement sprite to stage
+    this.app.stage.addChild(this.displacementSprite);
+  }
+
+  setup() {
+    const { items } = this.ui;
+    
+    // Create sprites for each slide
+    for (let i = 0; i < items.length; i++) {
+      const el = items[i];
+      const { width, height } = el.getBoundingClientRect();
+      
+      // Get image source
+      const img = el.querySelector('img');
+      const texture = this.textures[img.src];
+      
+      if (texture) {
+        // Create sprite
+        const sprite = new PIXI.Sprite(texture);
+        
+        // Position sprite 
+        sprite.anchor.set(0.5);
+        sprite.x = 0; // Will be set in render
+        sprite.y = store.wh / 2;
+        sprite.width = width;
+        sprite.height = height;
+        
+        // Make sprite interactive for hover effects
+        sprite.interactive = true;
+        sprite.cursor = 'pointer';
+        
+        // Add hover events
+        sprite.on('pointerover', () => this.onProjectHover(i));
+        sprite.on('pointerout', () => this.onProjectOut(i));
+        
+        this.container.addChild(sprite);
+        
+        // Calculate initial position for modulus wrapping
+        const initialX = i * (width + 50); // Simple spacing
+        
+        // Push to cache
+        this.items.push({
+          el, sprite,
+          width, height,
+          initialX,
+          projectIndex: i
+        });
+      } else {
+        console.warn('No texture found for:', img.src);
+      }
     }
   }
 
   calc() {
-    const state = this.state
-    state.current += (state.target - state.current) * this.opts.ease
-    state.currentRounded = Math.round(state.current * 100) / 100
-    state.diff = (state.target - state.current) * 0.0005
-    state.progress = gsap.utils.wrap(0, 1, state.currentRounded / state.max)
-
-    this.tl && this.tl.progress(state.progress)
+    const state = this.state;
+    const prevCurrent = state.current;
+    state.current += (state.target - state.current) * this.opts.ease;
+    
+    // Calculate direction and update displacement filter like in the example
+    const scroll = state.current - prevCurrent;
+    state.direction = scroll > 0 ? -1 : 1;
+    
+    // Update displacement filter scale based on scroll speed and direction
+    if (this.displacementFilter) {
+      const intensity = 8; // More subtle effect
+      const scaleValue = intensity * state.direction * Math.abs(scroll);
+      this.displacementFilter.scale.x = scaleValue;
+      this.displacementFilter.scale.y = 0;
+    }
   }
 
   render() {
-    this.calc()
-    this.transformItems()
+    this.calc();
+    this.transformItems();
   }
 
   transformItems() {
-    const { flags } = this.state
+    const containerWidth = this.getContainerWidth();
 
     for (let i = 0; i < this.items.length; i++) {
-      const item = this.items[i]
-      const { translate, isVisible, progress } = this.isVisible(item)
+      const item = this.items[i];
       
-      item.plane.updateX(translate)
-      item.plane.mat.uniforms.uVelo.value = this.state.diff
+      if (!item || !item.sprite) continue;
       
-      if (!item.out && item.tl) {
-        item.tl.progress(progress)
-      }
-
-      if (isVisible || flags.resize) {
-        item.out = false
-      } else if (!item.out) {
-        item.out = true
-      }
-    }   
-  }
-
-  isVisible({ left, right, width, min, max }) {
-    const { ww } = store
-    const { currentRounded } = this.state
-    const translate = gsap.utils.wrap(min, max, currentRounded)  
-    const threshold = this.opts.threshold
-    const start = left + translate
-    const end = right + translate
-    const isVisible = start < (threshold + ww) && end > -threshold
-    const progress = gsap.utils.clamp(0, 1, 1 - (translate + left + width) / (ww + width))
-
-    return {
-      translate,
-      isVisible,
-      progress
+      // Simple modulus-based positioning like the example
+      const baseX = item.initialX + this.state.current;
+      const wrappedX = ((baseX % containerWidth) + containerWidth) % containerWidth;
+      
+      // Center the sprite
+      item.sprite.x = wrappedX - (containerWidth / 2) + (store.ww / 2);
     }
   }
 
-  clampTarget() {
-    const state = this.state
-    
-    state.target = gsap.utils.clamp(state.max, 0, state.target)
+  getContainerWidth() {
+    // Calculate total width needed for seamless loop
+    if (this.items.length === 0) return store.ww;
+    return this.items.length * (this.items[0].width + 50);
   }
   
   getPos({ changedTouches, clientX, clientY, target }) {
-    const x = changedTouches ? changedTouches[0].clientX : clientX
-    const y = changedTouches ? changedTouches[0].clientY : clientY
-
-    return {
-      x, y, target
-    }
+    const x = changedTouches ? changedTouches[0].clientX : clientX;
+    const y = changedTouches ? changedTouches[0].clientY : clientY;
+    return { x, y, target };
   }
 
   onDown(e) {
-    const { x, y } = this.getPos(e)
-    const { flags, on } = this.state
+    const { x, y } = this.getPos(e);
+    const { flags, on } = this.state;
     
-    flags.dragging = true
-    on.x = x
-    on.y = y
+    flags.dragging = true;
+    on.x = x;
+    on.y = y;
   }
 
   onUp() {
-    const state = this.state
-    
-    state.flags.dragging = false
-    state.off = state.target
+    const state = this.state;
+    state.flags.dragging = false;
+    state.off = state.target;
   }
 
   onMove(e) {
-    const { x, y } = this.getPos(e)
-    const state = this.state
+    const { x, y } = this.getPos(e);
+    const state = this.state;
     
-    if (!state.flags.dragging) return
+    if (!state.flags.dragging) return;
 
-    const { off, on } = state
-    const moveX = x - on.x
-    const moveY = y - on.y
+    const { off, on } = state;
+    const moveX = x - on.x;
+    const moveY = y - on.y;
 
     if ((Math.abs(moveX) > Math.abs(moveY)) && e.cancelable) {
-      e.preventDefault()
-      e.stopPropagation()
+      e.preventDefault();
+      e.stopPropagation();
     }
 
-    state.target = off + (moveX * this.opts.speed)
+    state.target = off + (moveX * this.opts.speed);
   }
-}
 
-/***/
-/*** GL STUFF ****/
-/***/
-
-const backgroundCoverUv = `
-vec2 backgroundCoverUv(vec2 screenSize, vec2 imageSize, vec2 uv) {
-  float screenRatio = screenSize.x / screenSize.y;
-  float imageRatio = imageSize.x / imageSize.y;
-
-  vec2 newSize = screenRatio < imageRatio 
-      ? vec2(imageSize.x * screenSize.y / imageSize.y, screenSize.y)
-      : vec2(screenSize.x, imageSize.y * screenSize.x / imageSize.x);
-
-  vec2 newOffset = (screenRatio < imageRatio 
-      ? vec2((newSize.x - screenSize.x) / 2.0, 0.0) 
-      : vec2(0.0, (newSize.y - screenSize.y) / 2.0)) / newSize;
-
-  return uv * screenSize / newSize + newOffset;
-}
-`
-
-const vertexShader = `
-precision mediump float;
-
-uniform float uVelo;
-
-varying vec2 vUv;
-
-#define M_PI 3.1415926535897932384626433832795
-
-void main(){
-  vec3 pos = position;
-  pos.x = pos.x + ((sin(uv.y * M_PI) * uVelo) * 0.125);
-
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.);
-}
-`
-
-const fragmentShader = `
-precision mediump float;
-
-vec2 backgroundCoverUv(vec2 screenSize, vec2 imageSize, vec2 uv) {
-  float screenRatio = screenSize.x / screenSize.y;
-  float imageRatio = imageSize.x / imageSize.y;
-
-  vec2 newSize = screenRatio < imageRatio 
-      ? vec2(imageSize.x * screenSize.y / imageSize.y, screenSize.y)
-      : vec2(screenSize.x, imageSize.y * screenSize.x / imageSize.x);
-
-  vec2 newOffset = (screenRatio < imageRatio 
-      ? vec2((newSize.x - screenSize.x) / 2.0, 0.0) 
-      : vec2(0.0, (newSize.y - screenSize.y) / 2.0)) / newSize;
-
-  return uv * screenSize / newSize + newOffset;
-}
-
-uniform sampler2D uTexture;
-
-uniform vec2 uMeshSize;
-uniform vec2 uImageSize;
-
-uniform float uVelo;
-uniform float uScale;
-
-varying vec2 vUv;
-
-void main() {
-  vec2 uv = vUv;
-  vec2 texUv = backgroundCoverUv(uMeshSize, uImageSize, uv);
-  vec4 texture = texture2D(uTexture, texUv);
-
-  gl_FragColor = texture;
-}
-`
-
-const loader = new THREE.TextureLoader()
-loader.crossOrigin = 'anonymous'
-
-class Gl {
-  
-  constructor() {
-    this.scene = new THREE.Scene()
+  on() {
+    const { move, up, down } = this.events;
     
-    this.camera = new THREE.OrthographicCamera(
-      store.ww / - 2, 
-      store.ww / 2, 
-      store.wh / 2, 
-      store.wh / - 2, 
-      1, 
-      10 
-    )
-    this.camera.lookAt(this.scene.position)
-    this.camera.position.z = 1
-    
-    this.renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true
-    })
-    this.renderer.setPixelRatio(1.5)
-    this.renderer.setSize(store.ww, store.wh)
-    this.renderer.setClearColor(0xffffff, 0)
-    
-    this.init()
+    window.addEventListener(down, this.onDown);
+    window.addEventListener(move, this.onMove);
+    window.addEventListener(up, this.onUp);
   }
-  
-  render() {
-    this.renderer.render(this.scene, this.camera)
-  }
-  
-  init() {
-    const domEl = this.renderer.domElement
-    domEl.classList.add('dom-gl')  
-    document.body.appendChild(domEl)
-  }
-}
 
-class GlObject extends THREE.Object3D {
-  
-  init(el) {
-    this.el = el
+  off() {
+    const { move, up, down } = this.events;
     
-    this.resize()
+    window.removeEventListener(down, this.onDown);
+    window.removeEventListener(move, this.onMove);
+    window.removeEventListener(up, this.onUp);
   }
-  
-  resize() {
-    this.rect = this.el.getBoundingClientRect()
-    const { left, top, width, height } = this.rect
 
-    this.pos = {
-      x: (left + (width / 2)) - (store.ww / 2),
-      y: (top + (height / 2)) - (store.wh / 2)
+  onProjectHover(index) {
+    // Clear any pending hide timeout
+    if (this.hoverTimeout) {
+      clearTimeout(this.hoverTimeout);
+      this.hoverTimeout = null;
     }
     
-    this.position.y = this.pos.y
-    this.position.x = this.pos.x
-    
-    this.updateX()
-  }
-  
-  updateX(current) {
-    current && (this.position.x = current + this.pos.x)
-  }
-}
-
-const planeGeo = new THREE.PlaneGeometry(1, 1, 32, 32)
-const planeMat = new THREE.ShaderMaterial({
-  transparent: true,
-  fragmentShader,
-  vertexShader
-})
-
-class Plane extends GlObject {
-  
-  init(el) {
-    super.init(el)
-
-    this.geo = planeGeo
-    this.mat = planeMat.clone()
-    
-    this.mat.uniforms = {
-      uTime: { value: 0 },
-      uTexture: { value: 0 },
-      uMeshSize: { value: new THREE.Vector2(this.rect.width, this.rect.height) },
-      uImageSize: { value: new THREE.Vector2(0, 0) },
-      uScale: { value: 0.75 },
-      uVelo: { value: 0 }
+    // Highlight corresponding project item in UI
+    if (this.ui.projectItems[index]) {
+      this.ui.projectItems[index].classList.add('highlighted');
     }
+    
+    // Start fade in after 1 second delay
+    this.fadeTimeout = setTimeout(() => {
+      this.updateProjectDescription(index);
+      if (this.ui.projectDescription) {
+        this.ui.projectDescription.classList.add('visible');
+      }
+    }, 1000);
+  }
 
-    this.img = this.el.querySelector('img')
-    this.texture = loader.load(this.img.src, (texture) => {
-      texture.minFilter = THREE.LinearFilter
-      texture.generateMipmaps = false
-      
-      this.mat.uniforms.uTexture.value = texture
-      this.mat.uniforms.uImageSize.value = [this.img.naturalWidth, this.img.naturalHeight]
-    })
+  onProjectOut(index) {
+    // Cancel any pending fade in
+    if (this.fadeTimeout) {
+      clearTimeout(this.fadeTimeout);
+      this.fadeTimeout = null;
+    }
+    
+    // Remove highlight from project item
+    if (this.ui.projectItems[index]) {
+      this.ui.projectItems[index].classList.remove('highlighted');
+    }
+    
+    // Fade out immediately
+    if (this.ui.projectDescription) {
+      this.ui.projectDescription.classList.remove('visible');
+    }
+  }
 
-    this.mesh = new THREE.Mesh(this.geo, this.mat)
-    this.mesh.scale.set(this.rect.width, this.rect.height, 1)
-    this.add(this.mesh)    
-    gl.scene.add(this)
+
+  updateProjectDescription(index) {
+    const projectData = [
+      {
+        title: "Visual Identity Design",
+        description: "Complete brand identity system including logo design, color palette, typography, and brand guidelines for a modern tech startup."
+      },
+      {
+        title: "E-commerce Platform",
+        description: "Full-stack development of a responsive e-commerce platform with custom CMS, payment integration, and advanced filtering capabilities."
+      },
+      {
+        title: "Interactive Installation", 
+        description: "Motion-activated art installation combining physical sensors with digital projections for an immersive gallery experience."
+      },
+      {
+        title: "Mobile App Design",
+        description: "UX/UI design for a fitness tracking app featuring intuitive navigation, data visualization, and seamless user experience across devices."
+      },
+      {
+        title: "3D Product Visualization",
+        description: "High-fidelity 3D modeling and rendering for product showcase, featuring realistic materials, lighting, and interactive elements."
+      },
+      {
+        title: "Web Animation Series",
+        description: "Collection of micro-interactions and animations for web interfaces, focusing on performance optimization and user engagement."
+      },
+      {
+        title: "Digital Magazine Layout",
+        description: "Editorial design for digital publication with adaptive layouts, interactive elements, and optimized reading experience."
+      }
+    ];
+
+    if (index >= 0 && index < projectData.length) {
+      if (this.ui.projectTitle) {
+        this.ui.projectTitle.textContent = projectData[index].title;
+      }
+      if (this.ui.projectDetails) {
+        this.ui.projectDetails.textContent = projectData[index].description;
+      }
+    } else {
+      // Default state
+      if (this.ui.projectTitle) {
+        this.ui.projectTitle.textContent = "Portfolio Overview";
+      }
+      if (this.ui.projectDetails) {
+        this.ui.projectDetails.textContent = "Hover over any project image to explore detailed information about the creative process, technologies used, and design solutions implemented.";
+      }
+    }
+  }
+
+  destroy() {
+    this.off();
+    if (this.app) {
+      this.app.destroy(true, true);
+    }
   }
 }
 
-/***/
-/*** INIT STUFF ****/
-/***/
-
-const gl = new Gl()
-const slider = new Slider(document.querySelector('.js-slider'))
+// Initialize
+const slider = new SimplePixiSlider(document.querySelector('.js-slider'));
 
 const tick = () => {
-  gl.render()
-  slider.render()
-}
+  slider.render();
+};
 
-gsap.ticker.add(tick)
+gsap.ticker.add(tick);
