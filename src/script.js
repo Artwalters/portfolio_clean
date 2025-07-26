@@ -105,7 +105,7 @@ class SimplePixiSlider {
 
   async loadTextures() {
     // Use different paths for development vs production
-    const basePath = window.location.hostname === 'localhost' ? './img/' : '/';
+    const basePath = window.location.hostname === 'localhost' ? './img/' : '/portfolio_clean/';
     const imageUrls = [
       basePath + 'project-1.png',
       basePath + 'project-2.png', 
@@ -168,8 +168,8 @@ class SimplePixiSlider {
     const texture = PIXI.Texture.from(canvas);
     this.displacementSprite = new PIXI.Sprite(texture);
     
-    // Make it repeat
-    this.displacementSprite.texture.baseTexture.wrapMode = PIXI.WRAP_MODES.REPEAT;
+    // Make it repeat - using PIXI v8 syntax
+    this.displacementSprite.texture.source.style.addressMode = 'repeat';
     
     // Scale to cover screen
     const scale = Math.max(store.ww / 512, store.wh / 512);
