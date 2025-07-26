@@ -185,16 +185,16 @@ eventHandlers.wheel = (event) => {
     targetScrollDirection = event.deltaY > 0 ? -1 : 1
     
     if (isMobile) {
-        // Mobile: simpler, more predictable scrolling
-        const baseSpeed = scrollIntensity * 0.0008
-        targetScrollSpeed = Math.min(baseSpeed, 0.04)
+        // Mobile: faster, more predictable scrolling
+        const baseSpeed = scrollIntensity * 0.002
+        targetScrollSpeed = Math.min(baseSpeed, 0.08)
     } else {
-        // Desktop: original complex scaling
+        // Desktop: much faster scaling
         if (scrollIntensity > 50) {
-            const scaledIntensity = Math.pow((scrollIntensity - 50) / 100, 1.5)
-            targetScrollSpeed = Math.min(scaledIntensity * 0.005, 0.05)
+            const scaledIntensity = Math.pow((scrollIntensity - 50) / 100, 1.2)
+            targetScrollSpeed = Math.min(scaledIntensity * 0.025, 0.15)
         } else {
-            targetScrollSpeed = Math.min(scrollIntensity * 0.0001, 0.005)
+            targetScrollSpeed = Math.min(scrollIntensity * 0.0015, 0.03)
         }
     }
 }
@@ -273,11 +273,11 @@ eventHandlers.mousemove = (event) => {
             targetScrollDirection = deltaX > 0 ? 1 : -1
             
             if (isMobile) {
-                // Mobile: more responsive drag
-                targetScrollSpeed = Math.min(dragIntensity * 0.001, 0.03)
+                // Mobile: faster drag
+                targetScrollSpeed = Math.min(dragIntensity * 0.003, 0.08)
             } else {
-                // Desktop: subtle drag
-                targetScrollSpeed = Math.min(dragIntensity * 0.0002, 0.015)
+                // Desktop: much faster drag
+                targetScrollSpeed = Math.min(dragIntensity * 0.002, 0.1)
             }
         }
         
@@ -404,7 +404,7 @@ function highlightProject(projectId) {
                 showProjectDescription(projectId)
             }
             hoverTimer = null
-        }, 1500) // 1.5 second delay
+        }, 1000) // 1 second delay
         
     } catch (error) {
         console.warn('Error highlighting project:', error)
@@ -511,14 +511,16 @@ const tick = () => {
     
     // Balanced interpolation for smooth feel
     const isMobileInterp = window.innerWidth <= 768
-    const speedInterp = isMobileInterp ? 0.05 : 0.02
-    const directionInterp = isMobileInterp ? 0.03 : 0.01
+    const speedInterp = isMobileInterp ? 0.08 : 0.1
+    const directionInterp = isMobileInterp ? 0.03 : 0.04
     
     // Smooth interpolation to target speed
     scrollSpeed += (targetScrollSpeed - scrollSpeed) * speedInterp
     
-    // Smooth interpolation to target direction
-    scrollDirection += (targetScrollDirection - scrollDirection) * directionInterp
+    // Smooth interpolation to target direction with easing
+    const directionDiff = targetScrollDirection - scrollDirection
+    const easedDirectionInterp = directionInterp * Math.pow(Math.abs(directionDiff), 0.5)
+    scrollDirection += directionDiff * easedDirectionInterp
     
     // Combine auto scroll with user scroll, apply direction
     const currentSpeed = (autoScrollSpeed + scrollSpeed) * scrollDirection
@@ -544,7 +546,7 @@ const tick = () => {
     
     // Smooth deceleration for natural feel
     const isMobileDecel = window.innerWidth <= 768
-    const deceleration = isMobileDecel ? 0.97 : 0.98
+    const deceleration = isMobileDecel ? 0.98 : 0.99
     targetScrollSpeed *= deceleration
     
     // Render
