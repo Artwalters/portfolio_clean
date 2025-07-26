@@ -17,8 +17,8 @@ class SimplePixiSlider {
     
     this.el = el;
     this.opts = Object.assign({
-      speed: store.isDevice ? 1.5 : 2,
-      ease: store.isDevice ? 0.1 : 0.075
+      speed: store.isDevice ? 1.2 : 1.5, // Less responsive, more relaxed
+      ease: store.isDevice ? 0.08 : 0.06 // Much lower ease for smoother, slower transitions
     }, opts);
 
     this.ui = {
@@ -292,12 +292,17 @@ class SimplePixiSlider {
     flags.dragging = true;
     on.x = x;
     on.y = y;
+    
+    // Sync off position with current state to prevent jumping
+    this.state.off = this.state.target;
   }
 
   onUp() {
     const state = this.state;
     state.flags.dragging = false;
-    state.off = state.target;
+    
+    // Don't immediately sync off with target - let it coast naturally
+    // This creates a smoother release feeling
   }
 
   onMove(e) {
@@ -318,12 +323,32 @@ class SimplePixiSlider {
     state.target = off + (moveX * this.opts.speed);
   }
 
+  onWheel(e) {
+    e.preventDefault();
+    
+    const state = this.state;
+    const wheelSpeed = 15; // Even lower sensitivity for more relaxed feel
+    const smoothing = 0.08; // More smoothing for gentler response
+    
+    // Calculate smooth wheel delta
+    const deltaY = e.deltaY * smoothing;
+    
+    // Down scroll = positive deltaY = move right (positive direction)
+    // Up scroll = negative deltaY = move left (negative direction)
+    state.target += deltaY > 0 ? wheelSpeed : -wheelSpeed;
+  }
+
   on() {
     const { move, up, down } = this.events;
     
     window.addEventListener(down, this.onDown, { passive: false });
     window.addEventListener(move, this.onMove, { passive: false });
     window.addEventListener(up, this.onUp, { passive: false });
+    
+    // Add wheel event for desktop scroll control
+    if (!store.isDevice) {
+      window.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+    }
   }
 
   off() {
@@ -332,6 +357,10 @@ class SimplePixiSlider {
     window.removeEventListener(down, this.onDown);
     window.removeEventListener(move, this.onMove);
     window.removeEventListener(up, this.onUp);
+    
+    if (!store.isDevice) {
+      window.removeEventListener('wheel', this.onWheel.bind(this));
+    }
   }
 
   onProjectHover(index) {
