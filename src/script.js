@@ -195,9 +195,10 @@ class SimplePixiSlider {
       const el = items[i];
       const { width, height } = el.getBoundingClientRect();
       
-      // Get image source
-      const img = el.querySelector('img');
-      const texture = this.textures[img.src];
+      // Get texture by index instead of img.src to avoid Vite hash mismatch
+      const basePath = window.location.hostname === 'localhost' ? './img/' : '/portfolio_clean/';
+      const textureUrl = basePath + `project-${i + 1}.png`;
+      const texture = this.textures[textureUrl];
       
       if (texture) {
         // Create sprite
@@ -232,7 +233,7 @@ class SimplePixiSlider {
           projectIndex: i
         });
       } else {
-        console.warn('No texture found for:', img.src);
+        console.warn('No texture found for index:', i, 'URL:', textureUrl);
       }
     }
   }
