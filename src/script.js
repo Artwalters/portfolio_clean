@@ -1,3 +1,6 @@
+import * as PIXI from 'pixi.js';
+import { gsap } from 'gsap';
+
 // Simple PIXI.js slider based on modulus concept
 const store = {
   ww: window.innerWidth,
