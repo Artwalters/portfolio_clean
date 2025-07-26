@@ -102,13 +102,13 @@ class SimplePixiSlider {
 
   async loadTextures() {
     const imageUrls = [
-      './img/project-1.png',
-      './img/project-2.png',
-      './img/project-3.png',
-      './img/project-4.png',
-      './img/project-5.png',
-      './img/project-6.png',
-      './img/project-7.png'
+      '/project-1.png',
+      '/project-2.png', 
+      '/project-3.png',
+      '/project-4.png',
+      '/project-5.png',
+      '/project-6.png',
+      '/project-7.png'
     ];
 
     const textures = {};
