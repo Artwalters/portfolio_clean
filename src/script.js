@@ -1,651 +1,474 @@
-import * as THREE from 'three'
-import gsap from 'gsap'
-
-/**
- * Base
- */
-// Canvas
-const canvas = document.querySelector('canvas.webgl')
-canvas.style.cursor = 'grab'
-
-// Scene
-const scene = new THREE.Scene()
-
-/**
- * Sizes
- */
-const sizes = {
-    width: window.innerWidth,
-    height: window.innerHeight
+// Remove imports - using CDN versions
+const store = {
+  ww: window.innerWidth,
+  wh: window.innerHeight,
+  isDevice: navigator.userAgent.match(/Android/i)
+  || navigator.userAgent.match(/webOS/i)
+  || navigator.userAgent.match(/iPhone/i)
+  || navigator.userAgent.match(/iPad/i)
+  || navigator.userAgent.match(/iPod/i)
+  || navigator.userAgent.match(/BlackBerry/i)
+  || navigator.userAgent.match(/Windows Phone/i)
 }
 
-/**
- * Event Handlers (bound functions for cleanup)
- */
-const eventHandlers = {
-    resize: () => {
-        sizes.width = window.innerWidth
-        sizes.height = window.innerHeight
+class Slider {
 
-        camera.aspect = sizes.width / sizes.height
-        camera.updateProjectionMatrix()
+  constructor(el, opts = {}) {
+    this.bindAll()
 
-        renderer.setSize(sizes.width, sizes.height)
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    },
+    this.el = el
 
-    wheel: null, // Will be set later
-    touchstart: null,
-    touchmove: null,
-    mousemove: null
-}
+    this.opts = Object.assign({
+      speed: 2,
+      threshold: 50,
+      ease: 0.075
+    }, opts)
 
-window.addEventListener('resize', eventHandlers.resize)
-
-/**
- * Camera
- */
-const camera = new THREE.PerspectiveCamera(65, sizes.width / sizes.height, 0.01, 1000)
-// Adjust camera position based on device width
-const isMobile = window.innerWidth <= 768
-const cameraZ = isMobile ? 4 : 3  // Mobile slightly closer, desktop normal
-camera.position.z = cameraZ
-const baseCameraZ = cameraZ
-scene.add(camera)
-
-/**
- * Renderer
- */
-const renderer = new THREE.WebGLRenderer({
-    canvas: canvas,
-    antialias: true,
-    alpha: true
-})
-renderer.setSize(sizes.width, sizes.height)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-renderer.setClearColor(0x0a0a0a, 1)
-
-/**
- * Textures
- */
-const textureLoader = new THREE.TextureLoader()
-const projectImages = []
-const imageCount = 9
-
-// Load all project images with proper aspect ratios
-const loadPromises = []
-for(let i = 1; i <= imageCount; i++) {
-    const promise = new Promise((resolve) => {
-        const texture = textureLoader.load(
-            `./project-${i}.png`,
-            (texture) => {
-                texture.generateMipmaps = false
-                texture.minFilter = THREE.LinearFilter
-                texture.magFilter = THREE.LinearFilter
-                
-                const img = texture.image
-                const aspectRatio = img.width / img.height
-                
-                projectImages.push({
-                    texture: texture,
-                    aspectRatio: aspectRatio
-                })
-                resolve()
-            }
-        )
-    })
-    loadPromises.push(promise)
-}
-
-/**
- * Configuration
- */
-const CONFIG = {
-    PLANE_HEIGHT: 2,
-    PLANE_SPACING: 0.3,
-    SETS_NEEDED: 25,
-    RESET_BOUNDARY: 6
-}
-
-/**
- * Shader Materials
- */
-const vertexShader = `
-    uniform float uVelo;
-    
-    varying vec2 vUv;
-    
-    #define M_PI 3.1415926535897932384626433832795
-    
-    void main() {
-        vUv = uv;
-        vec3 pos = position;
-        
-        // Sine wave distortion based on velocity - creates rubber stretch effect
-        pos.x = pos.x + ((sin(uv.y * M_PI) * uVelo) * 1.0);
-        
-        // Visible but smooth z-depth for 3D effect
-        pos.z = sin(uv.y * M_PI) * abs(uVelo) * 0.3;
-        
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    this.ui = {
+      items: this.el.querySelectorAll('.js-slide'),
+      titles: document.querySelectorAll('.js-title'),
+      lines: document.querySelectorAll('.js-progress-line')
     }
-`;
+
+    this.state = {
+      target: 0,
+      current: 0,
+      currentRounded: 0,
+      y: 0,
+      on: {
+        x: 0,
+        y: 0
+      },
+      off: 0,
+      progress: 0,
+      diff: 0,
+      max: 0,
+      min: 0,
+      snap: {
+        points: []
+      },
+      flags: {
+        dragging: false
+      }
+    }
+
+    this.items = []
+    
+    this.events = {
+      move: store.isDevice ? 'touchmove' : 'mousemove',
+      up: store.isDevice ? 'touchend' : 'mouseup',
+      down: store.isDevice ? 'touchstart' : 'mousedown'
+    }
+    
+    this.init()
+  }
+  
+  bindAll() {
+    ['onDown', 'onMove', 'onUp']
+    .forEach(fn => this[fn] = this[fn].bind(this))
+  }
+
+  init() {
+    return gsap.utils.pipe(
+      this.setup(), 
+      this.on()
+    )
+  }
+
+  destroy() {
+    this.off()
+    this.state = null
+    this.items = null
+    this.opts = null
+    this.ui = null
+  }
+
+  on() {
+    const { move, up, down } = this.events
+    
+    window.addEventListener(down, this.onDown)
+    window.addEventListener(move, this.onMove)
+    window.addEventListener(up, this.onUp)
+  }
+
+  off() {
+    const { move, up, down } = this.events
+    
+    window.removeEventListener(down, this.onDown)
+    window.removeEventListener(move, this.onMove)
+    window.removeEventListener(up, this.onUp)
+  }
+  
+  setup() {
+    const { ww } = store
+    const state = this.state
+    const { items, titles } = this.ui
+    
+    const { 
+      width: wrapWidth, 
+      left: wrapDiff 
+    } = this.el.getBoundingClientRect()
+    
+    // Set bounding
+    state.max = -(items[items.length - 1].getBoundingClientRect().right - wrapWidth - wrapDiff)
+    state.min = 0
+    
+    // Global timeline
+    this.tl = gsap.timeline({ 
+      paused: true,
+      defaults: {
+        duration: 1,
+        ease: 'linear'
+      }
+    })
+    .fromTo('.js-progress-line-2', {
+      scaleX: 1
+    }, {
+      scaleX: 0,
+      duration: 0.5,
+      ease: 'power3'
+    }, 0)
+    .fromTo('.js-titles', {
+      yPercent: 0
+    }, {
+      yPercent: -(100 - (100 / titles.length)),
+    }, 0)
+    .fromTo('.js-progress-line', {
+      scaleX: 0
+    }, {
+      scaleX: 1
+    }, 0)
+    
+    // Cache stuff
+    for (let i = 0; i < items.length; i++) {
+      const el = items[i]
+      const { left, right, width } = el.getBoundingClientRect()
+      
+      // Create webgl plane
+      const plane = new Plane()
+      plane.init(el)
+      
+      // Timeline that plays when visible
+      const tl = gsap.timeline({ paused: true })
+      .fromTo(plane.mat.uniforms.uScale, {
+        value: 0.65
+      }, {
+        value: 1,
+        duration: 1,
+        ease: 'linear'
+      })
+
+      // Push to cache
+      this.items.push({
+        el, plane,
+        left, right, width,
+        min: left < ww ? (ww * 0.775) : -(ww * 0.225 - wrapWidth * 0.2),
+        max: left > ww ? state.max - (ww * 0.775) : state.max + (ww * 0.225 - wrapWidth * 0.2),
+        tl,
+        out: false
+      })
+    }
+  }
+
+  calc() {
+    const state = this.state
+    state.current += (state.target - state.current) * this.opts.ease
+    state.currentRounded = Math.round(state.current * 100) / 100
+    state.diff = (state.target - state.current) * 0.0005
+    state.progress = gsap.utils.wrap(0, 1, state.currentRounded / state.max)
+
+    this.tl && this.tl.progress(state.progress)
+  }
+
+  render() {
+    this.calc()
+    this.transformItems()
+  }
+
+  transformItems() {
+    const { flags } = this.state
+
+    for (let i = 0; i < this.items.length; i++) {
+      const item = this.items[i]
+      const { translate, isVisible, progress } = this.isVisible(item)
+      
+      item.plane.updateX(translate)
+      item.plane.mat.uniforms.uVelo.value = this.state.diff
+      
+      if (!item.out && item.tl) {
+        item.tl.progress(progress)
+      }
+
+      if (isVisible || flags.resize) {
+        item.out = false
+      } else if (!item.out) {
+        item.out = true
+      }
+    }   
+  }
+
+  isVisible({ left, right, width, min, max }) {
+    const { ww } = store
+    const { currentRounded } = this.state
+    const translate = gsap.utils.wrap(min, max, currentRounded)  
+    const threshold = this.opts.threshold
+    const start = left + translate
+    const end = right + translate
+    const isVisible = start < (threshold + ww) && end > -threshold
+    const progress = gsap.utils.clamp(0, 1, 1 - (translate + left + width) / (ww + width))
+
+    return {
+      translate,
+      isVisible,
+      progress
+    }
+  }
+
+  clampTarget() {
+    const state = this.state
+    
+    state.target = gsap.utils.clamp(state.max, 0, state.target)
+  }
+  
+  getPos({ changedTouches, clientX, clientY, target }) {
+    const x = changedTouches ? changedTouches[0].clientX : clientX
+    const y = changedTouches ? changedTouches[0].clientY : clientY
+
+    return {
+      x, y, target
+    }
+  }
+
+  onDown(e) {
+    const { x, y } = this.getPos(e)
+    const { flags, on } = this.state
+    
+    flags.dragging = true
+    on.x = x
+    on.y = y
+  }
+
+  onUp() {
+    const state = this.state
+    
+    state.flags.dragging = false
+    state.off = state.target
+  }
+
+  onMove(e) {
+    const { x, y } = this.getPos(e)
+    const state = this.state
+    
+    if (!state.flags.dragging) return
+
+    const { off, on } = state
+    const moveX = x - on.x
+    const moveY = y - on.y
+
+    if ((Math.abs(moveX) > Math.abs(moveY)) && e.cancelable) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    state.target = off + (moveX * this.opts.speed)
+  }
+}
+
+/***/
+/*** GL STUFF ****/
+/***/
+
+const backgroundCoverUv = `
+vec2 backgroundCoverUv(vec2 screenSize, vec2 imageSize, vec2 uv) {
+  float screenRatio = screenSize.x / screenSize.y;
+  float imageRatio = imageSize.x / imageSize.y;
+
+  vec2 newSize = screenRatio < imageRatio 
+      ? vec2(imageSize.x * screenSize.y / imageSize.y, screenSize.y)
+      : vec2(screenSize.x, imageSize.y * screenSize.x / imageSize.x);
+
+  vec2 newOffset = (screenRatio < imageRatio 
+      ? vec2((newSize.x - screenSize.x) / 2.0, 0.0) 
+      : vec2(0.0, (newSize.y - screenSize.y) / 2.0)) / newSize;
+
+  return uv * screenSize / newSize + newOffset;
+}
+`
+
+const vertexShader = `
+precision mediump float;
+
+uniform float uVelo;
+
+varying vec2 vUv;
+
+#define M_PI 3.1415926535897932384626433832795
+
+void main(){
+  vec3 pos = position;
+  pos.x = pos.x + ((sin(uv.y * M_PI) * uVelo) * 0.125);
+
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.);
+}
+`
 
 const fragmentShader = `
-    uniform sampler2D uTexture;
-    uniform float uVelo;
-    
-    varying vec2 vUv;
-    
-    void main() {
-        vec2 uv = vUv;
-        
-        // Simple texture sampling without RGB splitting
-        vec4 color = texture2D(uTexture, uv);
-        
-        gl_FragColor = color;
-    }
-`;
+precision mediump float;
 
-/**
- * Geometry Cache
- */
-const geometryCache = new Map()
+vec2 backgroundCoverUv(vec2 screenSize, vec2 imageSize, vec2 uv) {
+  float screenRatio = screenSize.x / screenSize.y;
+  float imageRatio = imageSize.x / imageSize.y;
 
-function getOrCreateGeometry(width, height) {
-    const key = `${width.toFixed(3)}_${height.toFixed(3)}`
-    if (!geometryCache.has(key)) {
-        // Increase subdivisions for smooth warping
-        geometryCache.set(key, new THREE.PlaneGeometry(width, height, 32, 32))
-    }
-    return geometryCache.get(key)
+  vec2 newSize = screenRatio < imageRatio 
+      ? vec2(imageSize.x * screenSize.y / imageSize.y, screenSize.y)
+      : vec2(screenSize.x, imageSize.y * screenSize.x / imageSize.x);
+
+  vec2 newOffset = (screenRatio < imageRatio 
+      ? vec2((newSize.x - screenSize.x) / 2.0, 0.0) 
+      : vec2(0.0, (newSize.y - screenSize.y) / 2.0)) / newSize;
+
+  return uv * screenSize / newSize + newOffset;
 }
 
-/**
- * Image Planes
- */
-const planes = []
-let totalWidth = 0
-let setsNeeded = 0
+uniform sampler2D uTexture;
 
-Promise.all(loadPromises).then(() => {
-    // Calculate total width for all images
-    projectImages.forEach((imageData) => {
-        const planeWidth = CONFIG.PLANE_HEIGHT * imageData.aspectRatio
-        totalWidth += planeWidth + CONFIG.PLANE_SPACING
+uniform vec2 uMeshSize;
+uniform vec2 uImageSize;
+
+uniform float uVelo;
+uniform float uScale;
+
+varying vec2 vUv;
+
+void main() {
+  vec2 uv = vUv;
+  vec2 texUv = backgroundCoverUv(uMeshSize, uImageSize, uv);
+  vec4 texture = texture2D(uTexture, texUv);
+
+  gl_FragColor = texture;
+}
+`
+
+const loader = new THREE.TextureLoader()
+loader.crossOrigin = 'anonymous'
+
+class Gl {
+  
+  constructor() {
+    this.scene = new THREE.Scene()
+    
+    this.camera = new THREE.OrthographicCamera(
+      store.ww / - 2, 
+      store.ww / 2, 
+      store.wh / 2, 
+      store.wh / - 2, 
+      1, 
+      10 
+    )
+    this.camera.lookAt(this.scene.position)
+    this.camera.position.z = 1
+    
+    this.renderer = new THREE.WebGLRenderer({
+      alpha: true,
+      antialias: true
     })
+    this.renderer.setPixelRatio(1.5)
+    this.renderer.setSize(store.ww, store.wh)
+    this.renderer.setClearColor(0xffffff, 0)
     
-    // Create many sets for infinite scroll
-    setsNeeded = CONFIG.SETS_NEEDED
+    this.init()
+  }
+  
+  render() {
+    this.renderer.render(this.scene, this.camera)
+  }
+  
+  init() {
+    const domEl = this.renderer.domElement
+    domEl.classList.add('dom-gl')  
+    document.body.appendChild(domEl)
+  }
+}
+
+class GlObject extends THREE.Object3D {
+  
+  init(el) {
+    this.el = el
     
-    for(let set = 0; set < setsNeeded; set++) {
-        let currentX = set * totalWidth - (setsNeeded * totalWidth) / 2 // Center the entire slider
-        
-        projectImages.forEach((imageData, index) => {
-            const planeWidth = CONFIG.PLANE_HEIGHT * imageData.aspectRatio
-            const planeGeometry = getOrCreateGeometry(planeWidth, CONFIG.PLANE_HEIGHT)
-            
-            // Create shader material with uniforms
-            const material = new THREE.ShaderMaterial({
-                uniforms: {
-                    uTexture: { value: imageData.texture },
-                    uVelo: { value: 0 }
-                },
-                vertexShader: vertexShader,
-                fragmentShader: fragmentShader,
-                side: THREE.DoubleSide,
-                transparent: true
-            })
-            
-            const plane = new THREE.Mesh(planeGeometry, material)
-            plane.position.x = currentX + planeWidth / 2
-            currentX += planeWidth + CONFIG.PLANE_SPACING
-            
-            planes.push({
-                mesh: plane,
-                width: planeWidth,
-                projectId: index + 1, // Project 1-9
-                material: material // Store material reference for uniform updates
-            })
-            scene.add(plane)
-        })
+    this.resize()
+  }
+  
+  resize() {
+    this.rect = this.el.getBoundingClientRect()
+    const { left, top, width, height } = this.rect
+
+    this.pos = {
+      x: (left + (width / 2)) - (store.ww / 2),
+      y: (top + (height / 2)) - (store.wh / 2)
     }
-}).catch(error => {
-    console.error('Failed to load textures:', error)
+    
+    this.position.y = this.pos.y
+    this.position.x = this.pos.x
+    
+    this.updateX()
+  }
+  
+  updateX(current) {
+    current && (this.position.x = current + this.pos.x)
+  }
+}
+
+const planeGeo = new THREE.PlaneGeometry(1, 1, 32, 32)
+const planeMat = new THREE.ShaderMaterial({
+  transparent: true,
+  fragmentShader,
+  vertexShader
 })
 
-/**
- * Scroll Animation
- */
-let scrollSpeed = 0
-let scrollDirection = 1
-let targetScrollDirection = 1
-let autoScrollSpeed = 0 // Disabled auto-scroll
-let targetScrollSpeed = 0
+class Plane extends GlObject {
+  
+  init(el) {
+    super.init(el)
 
-// Simple variables
-let targetCameraZoom = baseCameraZ
-
-// Mouse wheel control
-eventHandlers.wheel = (event) => {
-    const scrollIntensity = Math.abs(event.deltaY)
-    const isMobile = window.innerWidth <= 768
+    this.geo = planeGeo
+    this.mat = planeMat.clone()
     
-    // Simple scroll behavior
-    targetScrollDirection = event.deltaY > 0 ? -1 : 1
-    
-    if (isMobile) {
-        // Mobile: faster, more predictable scrolling
-        const baseSpeed = scrollIntensity * 0.002
-        targetScrollSpeed = Math.min(baseSpeed, 0.08)
-    } else {
-        // Desktop: much faster scaling
-        if (scrollIntensity > 50) {
-            const scaledIntensity = Math.pow((scrollIntensity - 50) / 100, 1.2)
-            targetScrollSpeed = Math.min(scaledIntensity * 0.025, 0.15)
-        } else {
-            targetScrollSpeed = Math.min(scrollIntensity * 0.0015, 0.03)
-        }
+    this.mat.uniforms = {
+      uTime: { value: 0 },
+      uTexture: { value: 0 },
+      uMeshSize: { value: new THREE.Vector2(this.rect.width, this.rect.height) },
+      uImageSize: { value: new THREE.Vector2(0, 0) },
+      uScale: { value: 0.75 },
+      uVelo: { value: 0 }
     }
-}
 
-window.addEventListener('wheel', eventHandlers.wheel)
-
-// Touch and drag controls
-let touchStartX = 0
-let isDragging = false
-let dragStartX = 0
-
-// Touch events for mobile
-eventHandlers.touchstart = (event) => {
-    touchStartX = event.touches[0].clientX
-}
-
-eventHandlers.touchmove = (event) => {
-    const touchX = event.touches[0].clientX
-    const deltaX = touchStartX - touchX
-    // Set target direction based on swipe direction
-    targetScrollDirection = deltaX > 0 ? 1 : -1
-    
-    // Simpler, smoother touch scrolling for mobile
-    const swipeIntensity = Math.abs(deltaX)
-    
-    // Direct proportional speed - no complex scaling
-    const baseSpeed = swipeIntensity * 0.002
-    targetScrollSpeed = Math.min(baseSpeed, 0.06)
-    
-    touchStartX = touchX
-}
-
-// Mouse drag events for desktop
-eventHandlers.mousedown = (event) => {
-    isDragging = true
-    dragStartX = event.clientX
-    canvas.style.cursor = 'grabbing'
-}
-
-eventHandlers.mouseup = () => {
-    if (isDragging) {
-        isDragging = false
-        canvas.style.cursor = 'grab'
-    }
-}
-
-window.addEventListener('touchstart', eventHandlers.touchstart)
-window.addEventListener('touchmove', eventHandlers.touchmove)
-window.addEventListener('mousedown', eventHandlers.mousedown)
-window.addEventListener('mouseup', eventHandlers.mouseup)
-
-/**
- * Raycaster for hover detection
- */
-const raycaster = new THREE.Raycaster()
-const mouse = new THREE.Vector2()
-let hoveredPlane = null
-let mouseHasMoved = false
-let hoverTimer = null
-let pendingHoverProject = null
-
-// Mouse move handler for hover detection and drag
-eventHandlers.mousemove = (event) => {
-    mouse.x = (event.clientX / sizes.width) * 2 - 1
-    mouse.y = -(event.clientY / sizes.height) * 2 + 1
-    mouseHasMoved = true
-    
-    // Handle drag if active
-    if (isDragging) {
-        const deltaX = dragStartX - event.clientX
-        const dragIntensity = Math.abs(deltaX)
-        const isMobile = window.innerWidth <= 768
-        
-        // Smooth drag for all devices
-        if (dragIntensity > 2) {
-            targetScrollDirection = deltaX > 0 ? 1 : -1
-            
-            if (isMobile) {
-                // Mobile: faster drag
-                targetScrollSpeed = Math.min(dragIntensity * 0.003, 0.08)
-            } else {
-                // Desktop: much faster drag
-                targetScrollSpeed = Math.min(dragIntensity * 0.002, 0.1)
-            }
-        }
-        
-        dragStartX = event.clientX
-    }
-}
-
-window.addEventListener('mousemove', eventHandlers.mousemove)
-
-/**
- * Find the project currently in center of screen
- */
-function getCurrentCenterProject() {
-    let centerPlane = null
-    let minDistance = Infinity
-    
-    planes.forEach(planeData => {
-        const distance = Math.abs(planeData.mesh.position.x - 0) // Distance from center (x=0)
-        if (distance < minDistance) {
-            minDistance = distance
-            centerPlane = planeData
-        }
+    this.img = this.el.querySelector('img')
+    this.texture = loader.load(this.img.src, (texture) => {
+      texture.minFilter = THREE.LinearFilter
+      texture.generateMipmaps = false
+      
+      this.mat.uniforms.uTexture.value = texture
+      this.mat.uniforms.uImageSize.value = [this.img.naturalWidth, this.img.naturalHeight]
     })
-    
-    return centerPlane ? centerPlane.projectId : 1
+
+    this.mesh = new THREE.Mesh(this.geo, this.mat)
+    this.mesh.scale.set(this.rect.width, this.rect.height, 1)
+    this.add(this.mesh)    
+    gl.scene.add(this)
+  }
 }
 
+/***/
+/*** INIT STUFF ****/
+/***/
 
-/**
- * Cleanup function for proper disposal
- */
-function cleanup() {
-    // Remove all event listeners
-    window.removeEventListener('resize', eventHandlers.resize)
-    window.removeEventListener('wheel', eventHandlers.wheel)
-    window.removeEventListener('touchstart', eventHandlers.touchstart)
-    window.removeEventListener('touchmove', eventHandlers.touchmove)
-    window.removeEventListener('mousemove', eventHandlers.mousemove)
-    window.removeEventListener('mousedown', eventHandlers.mousedown)
-    window.removeEventListener('mouseup', eventHandlers.mouseup)
-    
-    // Clear timers
-    if (hoverTimer) {
-        clearTimeout(hoverTimer)
-        hoverTimer = null
-    }
-    
-    // Dispose geometries
-    geometryCache.forEach(geometry => geometry.dispose())
-    geometryCache.clear()
-    
-    // Dispose materials and textures
-    planes.forEach(planeData => {
-        if (planeData.mesh.material) {
-            if (planeData.mesh.material.map) {
-                planeData.mesh.material.map.dispose()
-            }
-            planeData.mesh.material.dispose()
-        }
-        scene.remove(planeData.mesh)
-    })
-    
-    // Dispose renderer
-    renderer.dispose()
-}
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', cleanup)
-
-// Function to highlight/unhighlight project text
-// Project descriptions
-const projectDescriptions = {
-    1: "minimalist design exploration focusing on clean typography and spatial relationships",
-    2: "interactive installation combining digital media with physical space environments", 
-    3: "brand identity system for emerging technology company with comprehensive guidelines",
-    4: "editorial design for contemporary art publication emphasizing readability and impact",
-    5: "web platform for creative collaboration with intuitive navigation and workflow",
-    6: "packaging design series for sustainable products using eco-friendly materials",
-    7: "motion graphics campaign for social impact initiative with dynamic storytelling",
-    8: "architectural visualization and space planning for modern residential spaces",
-    9: "digital art collection exploring generative design and algorithmic creativity"
-}
-
-function highlightProject(projectId) {
-    try {
-        // Clear any existing timer
-        if (hoverTimer) {
-            clearTimeout(hoverTimer)
-            hoverTimer = null
-        }
-        
-        // If no project, clear immediately
-        if (!projectId) {
-            pendingHoverProject = null
-            hideProjectDescription()
-            document.querySelectorAll('.project-item').forEach(item => {
-                item.classList.remove('highlighted')
-            })
-            return
-        }
-        
-        // If same project, do nothing
-        if (pendingHoverProject === projectId) {
-            return
-        }
-        
-        // Clear current highlights and description
-        hideProjectDescription()
-        document.querySelectorAll('.project-item').forEach(item => {
-            item.classList.remove('highlighted')
-        })
-        
-        // Set pending project
-        pendingHoverProject = projectId
-        
-        // Set timer for 1.5 second delay
-        hoverTimer = setTimeout(() => {
-            if (pendingHoverProject === projectId) {
-                const projectItem = document.querySelector(`[data-project="${projectId}"]`)
-                if (projectItem) {
-                    projectItem.classList.add('highlighted')
-                }
-                // Show project description
-                showProjectDescription(projectId)
-            }
-            hoverTimer = null
-        }, 1000) // 1 second delay
-        
-    } catch (error) {
-        console.warn('Error highlighting project:', error)
-    }
-}
-
-function showProjectDescription(projectId) {
-    try {
-        const descriptionElement = document.querySelector('.project-description')
-        const description = projectDescriptions[projectId]
-        
-        if (description && descriptionElement) {
-            descriptionElement.textContent = description
-            descriptionElement.classList.add('visible')
-        }
-    } catch (error) {
-        console.warn('Error showing project description:', error)
-    }
-}
-
-function hideProjectDescription() {
-    try {
-        const descriptionElement = document.querySelector('.project-description')
-        if (descriptionElement) {
-            descriptionElement.classList.remove('visible')
-            // Clear text after fade-out animation completes
-            setTimeout(() => {
-                if (!descriptionElement.classList.contains('visible')) {
-                    descriptionElement.textContent = ''
-                }
-            }, 2500) // Match the CSS transition duration
-        }
-    } catch (error) {
-        console.warn('Error hiding project description:', error)
-    }
-}
-
-
-
-// Final navigation (for click or final selection)
-function navigateToProject(projectId) {
-    // Find the closest plane with the target project ID to camera center
-    let targetPlane = null
-    let minDistance = Infinity
-    
-    planes.forEach(planeData => {
-        if (planeData.projectId === projectId) {
-            const distance = Math.abs(planeData.mesh.position.x - 0) // Distance from center (x=0)
-            if (distance < minDistance) {
-                minDistance = distance
-                targetPlane = planeData
-            }
-        }
-    })
-    
-    if (targetPlane) {
-        // Calculate exact offset to center the selected plane at x=0 (camera center)
-        const currentX = targetPlane.mesh.position.x
-        const targetPosition = 0 // Exact center
-        const offset = currentX - targetPosition
-        
-        // Smooth GSAP animation to move all planes
-        planes.forEach(planeData => {
-            gsap.to(planeData.mesh.position, {
-                x: planeData.mesh.position.x - offset,
-                duration: 1.5,
-                ease: "power2.out"
-            })
-        })
-    }
-}
-
-
-/**
- * Animation
- */
-const clock = new THREE.Clock()
-
-// Variable to track velocity
-let velocity = 0
-let smoothVelocity = 0
+const gl = new Gl()
+const slider = new Slider(document.querySelector('.js-slider'))
 
 const tick = () => {
-    const elapsedTime = clock.getElapsedTime()
-    
-    // Update shader uniforms for all planes (moved up to be before other calculations)
-    planes.forEach((planeData) => {
-        if (planeData.material && planeData.material.uniforms) {
-            // Update velocity uniform
-            planeData.material.uniforms.uVelo.value = velocity
-        }
-    })
-    
-    
-    // Hover detection (only when mouse has moved)
-    if (mouseHasMoved) {
-        raycaster.setFromCamera(mouse, camera)
-        const intersects = raycaster.intersectObjects(planes.map(p => p.mesh))
-        
-        if (intersects.length > 0) {
-            const intersectedPlane = intersects[0].object
-            const planeData = planes.find(p => p.mesh === intersectedPlane)
-            
-            if (planeData && hoveredPlane !== planeData.projectId) {
-                hoveredPlane = planeData.projectId
-                highlightProject(hoveredPlane)
-            }
-        } else {
-            if (hoveredPlane !== null) {
-                hoveredPlane = null
-                highlightProject(null)
-            }
-        }
-        
-        mouseHasMoved = false
-    }
-    
-    // Very smooth interpolation for gradual acceleration
-    const isMobileInterp = window.innerWidth <= 768
-    const speedInterp = isMobileInterp ? 0.03 : 0.04
-    const directionInterp = isMobileInterp ? 0.015 : 0.02
-    
-    // Smooth interpolation to target speed
-    scrollSpeed += (targetScrollSpeed - scrollSpeed) * speedInterp
-    
-    // Smooth interpolation to target direction with easing
-    const directionDiff = targetScrollDirection - scrollDirection
-    const easedDirectionInterp = directionInterp * Math.pow(Math.abs(directionDiff), 0.5)
-    scrollDirection += directionDiff * easedDirectionInterp
-    
-    // Combine auto scroll with user scroll, apply direction
-    const currentSpeed = (autoScrollSpeed + scrollSpeed) * scrollDirection
-    
-    // Calculate velocity based on currentSpeed which already handles direction
-    const currentVelocity = currentSpeed * -3.0 // Negative because planes move opposite to scroll
-    
-    // Smooth velocity to avoid sudden changes
-    smoothVelocity += (currentVelocity - smoothVelocity) * 0.08
-    
-    // Final velocity with decay
-    velocity = smoothVelocity
-    
-    // Natural decay when not moving
-    if (Math.abs(currentSpeed) < 0.0001) {
-        velocity *= 0.985
-    }
-    
-    // Update plane positions
-    planes.forEach((planeData) => {
-        planeData.mesh.position.x -= currentSpeed
-    
-        // Reset position for infinite scroll (both directions)
-        const resetBoundary = CONFIG.RESET_BOUNDARY
-        if (scrollDirection > 0) {
-            // Moving left - reset much earlier
-            if (planeData.mesh.position.x < -resetBoundary) {
-                planeData.mesh.position.x += totalWidth * setsNeeded
-            }
-        } else {
-            // Moving right - reset much earlier
-            if (planeData.mesh.position.x > resetBoundary) {
-                planeData.mesh.position.x -= totalWidth * setsNeeded
-            }
-        }
-    })
-    
-    // Smooth deceleration for natural feel
-    const isMobileDecel = window.innerWidth <= 768
-    const deceleration = isMobileDecel ? 0.98 : 0.99
-    targetScrollSpeed *= deceleration
-    
-    // Render
-    renderer.render(scene, camera)
-    
-    // Call tick again on the next frame
-    window.requestAnimationFrame(tick)
+  gl.render()
+  slider.render()
 }
 
-// Add click functionality to project items
-document.addEventListener('DOMContentLoaded', () => {
-    const projectItems = document.querySelectorAll('.project-item')
-    
-    projectItems.forEach(item => {
-        item.addEventListener('click', (event) => {
-            const projectId = event.target.getAttribute('data-project')
-            console.log(`Selected project ${projectId}`)
-            
-            // Navigate to project
-            navigateToProject(parseInt(projectId))
-        })
-    })
-})
-
-tick()
+gsap.ticker.add(tick)
