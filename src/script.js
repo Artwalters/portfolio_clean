@@ -101,14 +101,16 @@ class SimplePixiSlider {
   }
 
   async loadTextures() {
+    // Use different paths for development vs production
+    const basePath = window.location.hostname === 'localhost' ? './img/' : '/';
     const imageUrls = [
-      '/project-1.png',
-      '/project-2.png', 
-      '/project-3.png',
-      '/project-4.png',
-      '/project-5.png',
-      '/project-6.png',
-      '/project-7.png'
+      basePath + 'project-1.png',
+      basePath + 'project-2.png', 
+      basePath + 'project-3.png',
+      basePath + 'project-4.png',
+      basePath + 'project-5.png',
+      basePath + 'project-6.png',
+      basePath + 'project-7.png'
     ];
 
     const textures = {};
