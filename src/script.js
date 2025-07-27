@@ -856,12 +856,11 @@ barba.init({
         heroImg.style.width = '';
         heroImg.style.height = '';
         heroImg.style.zIndex = '';
-        heroImg.style.transform = '';
+        heroImg.style.transform = ''; // CSS will apply translate(-50%, -50%)
       } else {
         // Fallback if no transition image
         if (heroImg) {
           heroImg.style.opacity = '1';
-          heroImg.style.transform = 'scale(1)';
         }
         data.next.container.style.opacity = '1';
       }
