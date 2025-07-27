@@ -439,6 +439,13 @@ html::-webkit-scrollbar {
     transform-origin: center;
 }
 
+@media (max-width: 768px) {
+    .project-hero-image {
+        width: 45vw;
+        height: 45vw;
+    }
+}
+
 /* Project details section */
 .project-details {
     background: #fff;
