@@ -424,8 +424,8 @@ body{
 }
 
 .project-hero-image {
-    width: calc(18vw * 1.1);
-    height: calc(18vw * 1.1);
+    width: 18vw;
+    height: 18vw;
     object-fit: cover;
     transform-origin: center;
 }

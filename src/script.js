@@ -779,91 +779,62 @@ barba.init({
     to: {
       namespace: 'project'
     },
+    beforeEnter(data) {
+      // Hide the new page BEFORE it becomes visible
+      data.next.container.style.opacity = '0';
+    },
     leave(data) {
-      // Disable wheel events IMMEDIATELY to prevent scroll blocking
+      // Disable wheel events to prevent scroll blocking
       if (slider && !store.isDevice) {
         window.removeEventListener('wheel', slider.onWheel);
       }
       
-      // Keep overflow hidden during transition
-      document.body.style.overflow = 'hidden';
-      
-      // Fade out only the UI elements, keep PIXI visible
+      // Hide UI instantly
       const uiOverlay = data.current.container.querySelector('.ui-overlay');
       const sliderHTML = data.current.container.querySelector('.slider');
       
-      return gsap.timeline()
-        .to([uiOverlay, sliderHTML], {
-          opacity: 0,
-          duration: 0.3,
-          ease: 'power2.inOut'
-        })
-        .call(() => {
-          // Start the handoff from PIXI to HTML
-          if (window.transitionImage) {
-            window.transitionImage.style.opacity = '1';
-            window.transitionImage.style.zIndex = '9999';
-            
-            // Hide canvas gradually
-            const canvas = document.querySelector('canvas');
-            if (canvas) {
-              gsap.to(canvas, { opacity: 0, duration: 0.2 });
-            }
-          }
-        });
+      if (uiOverlay) uiOverlay.style.opacity = '0';
+      if (sliderHTML) sliderHTML.style.opacity = '0';
+      
+      // Show transition image if it exists
+      if (window.transitionImage) {
+        window.transitionImage.style.opacity = '1';
+        window.transitionImage.style.zIndex = '9999';
+      }
+      
+      // Hide canvas instantly
+      const canvas = document.querySelector('canvas');
+      if (canvas) canvas.style.opacity = '0';
+      
+      return gsap.timeline(); // Empty timeline - no animations
     },
     enter(data) {
-      // Enable scrolling on project pages - THIS IS KEY!
+      // Enable scrolling immediately
       document.body.style.overflow = 'auto';
       
-      // Hide project content initially
+      // Get elements
       const content = data.next.container.querySelector('.project-content');
       const heroImg = data.next.container.querySelector('.project-hero-image');
       
-      if (content) content.style.opacity = '0';
-      if (heroImg) heroImg.style.opacity = '0';
-      
-      // Use transition image for smooth handoff
-      if (window.transitionImage) {
-        const timeline = gsap.timeline();
-        
-        // Position transition image at hero position
-        timeline.call(() => {
-          window.transitionImage.style.position = 'absolute';
-          window.transitionImage.style.top = '50vh';
-          window.transitionImage.style.left = '50%';
-          window.transitionImage.style.transform = 'translate(-50%, -50%)';
-          window.transitionImage.style.zIndex = '9999';
-        })
-        // Scale transition image
-        .to(window.transitionImage, {
-          scale: 1.5,
-          duration: 0.8,
-          ease: 'power2.out'
-        })
-        // Replace with hero image and show content
-        .call(() => {
-          if (heroImg) {
-            heroImg.style.opacity = '1';
-            heroImg.style.transform = 'scale(1.5)';
-          }
-          
-          // Remove transition image
-          if (window.transitionImage) {
-            window.transitionImage.remove();
-            window.transitionImage = null;
-          }
-        }, null, '-=0.2')
-        .to(content, {
-          opacity: 1,
-          duration: 0.6
-        }, '-=0.4');
-        
-        return timeline;
+      // Show hero image instantly at normal slider size
+      if (heroImg) {
+        heroImg.style.opacity = '1';
+        heroImg.style.transform = 'scale(1)'; // Same size as slider
       }
       
-      // Fallback animation
-      return gsap.to(content, { opacity: 1, duration: 0.6 });
+      // Show content instantly
+      if (content) content.style.opacity = '1';
+      
+      // NOW show the whole page
+      data.next.container.style.opacity = '1';
+      
+      // Clean up transition image
+      if (window.transitionImage) {
+        window.transitionImage.remove();
+        window.transitionImage = null;
+      }
+      
+      return gsap.timeline(); // Empty timeline - no animations
     },
     afterEnter() {
       // KEEP SCROLLING ENABLED on project page
@@ -894,23 +865,27 @@ barba.init({
       namespace: 'home'
     },
     leave(data) {
-      // Clean up transition image when leaving project page
+      // Clean up transition image
       if (window.transitionImage) {
         window.transitionImage.remove();
         window.transitionImage = null;
       }
       
-      return gsap.to(data.current.container, {
-        opacity: 0,
-        duration: 0.5
-      });
+      // Hide project page instantly
+      data.current.container.style.opacity = '0';
+      return gsap.timeline(); // No animations
     },
     enter(data) {
+      // Set scrolling for home page
+      document.body.style.overflow = 'hidden';
+      
+      // Show home page instantly
+      data.next.container.style.opacity = '1';
+      
+      // Initialize slider
       initSlider();
-      return gsap.fromTo(data.next.container, 
-        { opacity: 0 },
-        { opacity: 1, duration: 0.5 }
-      );
+      
+      return gsap.timeline(); // No animations
     }
   }]
 });
