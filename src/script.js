@@ -485,8 +485,7 @@ class SimplePixiSlider {
       // If clicking the already expanded image, collapse all
       this.collapseAll();
     } else {
-      // Store clicked index globally for transition
-      window.clickedProjectIndex = index;
+      // No need to store index - each page has its own URL
       // Expand the clicked image and collapse others
       this.expandImage(index);
     }
@@ -582,8 +581,8 @@ class SimplePixiSlider {
             
             console.log('Transition image created, navigating...');
             
-            // Navigate to project page
-            barba.go(`./project.html?id=${index + 1}`);
+            // Navigate to specific project page
+            barba.go(`./project-${index + 1}.html`);
           }
         }
       });
@@ -818,19 +817,13 @@ barba.init({
       // Keep overflow hidden - project page doesn't need scrolling
       document.body.style.overflow = 'hidden';
       
-      // Get the clicked project index
-      const projectIndex = window.clickedProjectIndex || 0;
-      
       // Hide project content initially
       const content = data.next.container.querySelector('.project-content');
       if (content) content.style.opacity = '0';
       
-      // Update project content
-      const container = data.next.container;
-      const heroImg = container.querySelector('.project-hero-image');
-      
+      // Get hero image (no need to change src - it's already correct in HTML)
+      const heroImg = data.next.container.querySelector('.project-hero-image');
       if (heroImg) {
-        heroImg.src = `./img/project-${projectIndex + 1}.png`;
         heroImg.style.opacity = '0'; // Hide initially
       }
       
@@ -897,7 +890,6 @@ barba.init({
       
       // Clean up global state
       window.finalSpritePosition = null;
-      window.clickedProjectIndex = null;
       
       // Destroy slider for memory cleanup
       destroySlider().catch(console.warn);
