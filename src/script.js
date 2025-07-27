@@ -58,7 +58,7 @@ class SimplePixiSlider {
   }
   
   bindAll() {
-    ['onDown', 'onMove', 'onUp']
+    ['onDown', 'onMove', 'onUp', 'onWheel']
     .forEach(fn => this[fn] = this[fn].bind(this));
   }
 
@@ -422,7 +422,7 @@ class SimplePixiSlider {
     
     // Add wheel event for desktop scroll control
     if (!store.isDevice) {
-      window.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+      window.addEventListener('wheel', this.onWheel, { passive: false });
     }
   }
 
@@ -434,7 +434,7 @@ class SimplePixiSlider {
     window.removeEventListener(up, this.onUp);
     
     if (!store.isDevice) {
-      window.removeEventListener('wheel', this.onWheel.bind(this));
+      window.removeEventListener('wheel', this.onWheel);
     }
   }
 
@@ -780,6 +780,11 @@ barba.init({
       namespace: 'project'
     },
     leave(data) {
+      // Disable wheel events IMMEDIATELY to prevent scroll blocking
+      if (slider && !store.isDevice) {
+        window.removeEventListener('wheel', slider.onWheel);
+      }
+      
       // Keep overflow hidden during transition
       document.body.style.overflow = 'hidden';
       
@@ -796,71 +801,59 @@ barba.init({
         .call(() => {
           // Start the handoff from PIXI to HTML
           if (window.transitionImage) {
-            console.log('Handoff: transition image exists, making visible');
             window.transitionImage.style.opacity = '1';
             window.transitionImage.style.zIndex = '9999';
             
             // Hide canvas gradually
             const canvas = document.querySelector('canvas');
             if (canvas) {
-              gsap.to(canvas, {
-                opacity: 0,
-                duration: 0.2
-              });
+              gsap.to(canvas, { opacity: 0, duration: 0.2 });
             }
-          } else {
-            console.log('Warning: No transition image found!');
           }
         });
     },
     enter(data) {
-      // Keep overflow hidden - project page doesn't need scrolling
-      document.body.style.overflow = 'hidden';
+      // Enable scrolling on project pages - THIS IS KEY!
+      document.body.style.overflow = 'auto';
       
       // Hide project content initially
       const content = data.next.container.querySelector('.project-content');
-      if (content) content.style.opacity = '0';
-      
-      // Get hero image (no need to change src - it's already correct in HTML)
       const heroImg = data.next.container.querySelector('.project-hero-image');
-      if (heroImg) {
-        heroImg.style.opacity = '0'; // Hide initially
-      }
       
-      // Use the captured HTML image for transition
+      if (content) content.style.opacity = '0';
+      if (heroImg) heroImg.style.opacity = '0';
+      
+      // Use transition image for smooth handoff
       if (window.transitionImage) {
-        console.log('Enter: Using transition image for animation');
-        
-        // Create final animation timeline
         const timeline = gsap.timeline();
         
-        // First, ensure transition image is visible
+        // Position transition image at hero position
         timeline.call(() => {
-          console.log('Enter: Ensuring transition image visibility');
-          window.transitionImage.style.opacity = '1';
+          window.transitionImage.style.position = 'absolute';
+          window.transitionImage.style.top = '50vh';
+          window.transitionImage.style.left = '50%';
+          window.transitionImage.style.transform = 'translate(-50%, -50%)';
           window.transitionImage.style.zIndex = '9999';
-          window.transitionImage.style.transformOrigin = 'center center';
         })
-        // Scale the transition image to 1.5x
+        // Scale transition image
         .to(window.transitionImage, {
           scale: 1.5,
           duration: 0.8,
           ease: 'power2.out'
         })
-        // Keep transition image - no switching needed
+        // Replace with hero image and show content
         .call(() => {
-          // Just keep the transition image, don't switch to hero image
-          // This prevents any brightness/filter differences
           if (heroImg) {
-            heroImg.style.display = 'none'; // Hide hero image completely
+            heroImg.style.opacity = '1';
+            heroImg.style.transform = 'scale(1.5)';
           }
           
-          // Keep transition image as the final state
+          // Remove transition image
           if (window.transitionImage) {
-            window.transitionImage.style.zIndex = '9999';
-            // Don't remove it - it IS the final image
+            window.transitionImage.remove();
+            window.transitionImage = null;
           }
-        }, null, '-=0.6')
+        }, null, '-=0.2')
         .to(content, {
           opacity: 1,
           duration: 0.6
@@ -869,24 +862,18 @@ barba.init({
         return timeline;
       }
       
-      // Fallback if no slider
-      return gsap.to(data.next.container, {
-        opacity: 1,
-        duration: 0.5
-      });
+      // Fallback animation
+      return gsap.to(content, { opacity: 1, duration: 0.6 });
     },
     afterEnter() {
-      // Keep overflow hidden on project page
-      document.body.style.overflow = 'hidden';
+      // KEEP SCROLLING ENABLED on project page
+      document.body.style.overflow = 'auto';
       
-      // Clean up PIXI and transition elements
+      // Clean up PIXI canvas
       const canvas = document.querySelector('canvas');
       if (canvas) {
         canvas.remove();
       }
-      
-      // Keep transition image - it's now the permanent image
-      // Don't remove it in cleanup
       
       // Clean up global state
       window.finalSpritePosition = null;
@@ -937,3 +924,19 @@ if (document.querySelector('[data-barba-namespace="home"]')) {
 } else {
   document.body.style.overflow = 'auto';
 }
+
+// Global Barba.js hooks for scroll management and interaction control
+barba.hooks.enter(() => {
+  // Reset scroll position on page entry
+  window.scrollTo(0, 0);
+});
+
+barba.hooks.before(() => {
+  // Disable pointer events during transitions
+  document.querySelector('html').classList.add('is-transitioning');
+});
+
+barba.hooks.after(() => {
+  // Re-enable interaction after transitions
+  document.querySelector('html').classList.remove('is-transitioning');
+});
