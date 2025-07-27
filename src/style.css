@@ -91,6 +91,7 @@ body{
   user-select: none;
   cursor: grab;
   z-index: 2;
+  pointer-events: none; /* Let clicks pass through to canvas */
 }
 
 @media (max-width: 768px) {

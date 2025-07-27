@@ -44,6 +44,8 @@ class SimplePixiSlider {
     this.items = [];
     this.hoverTimeout = null;
     this.fadeTimeout = null;
+    this.expandedIndex = null;
+    this.isAnimating = false;
     
     this.events = {
       move: store.isDevice ? 'touchmove' : 'mousemove',
@@ -88,7 +90,7 @@ class SimplePixiSlider {
     this.app.canvas.style.left = '0';
     this.app.canvas.style.width = '100%';
     this.app.canvas.style.height = '100%';
-    this.app.canvas.style.pointerEvents = 'none';
+    this.app.canvas.style.pointerEvents = 'auto'; // Changed from 'none' to 'auto'
     this.app.canvas.style.zIndex = '1';
     document.body.appendChild(this.app.canvas);
 
@@ -121,6 +123,11 @@ class SimplePixiSlider {
       const url = imageUrls[i];
       try {
         const texture = await PIXI.Assets.load(url);
+        
+        // Set high-quality texture settings
+        texture.source.scaleMode = 'linear';
+        texture.source.mipmap = true;
+        
         // Store texture with both relative and absolute URL
         textures[url] = texture;
         
@@ -204,20 +211,44 @@ class SimplePixiSlider {
         // Create sprite
         const sprite = new PIXI.Sprite(texture);
         
-        // Position sprite 
-        sprite.anchor.set(0.5);
+        // Position sprite with centered anchor
+        sprite.anchor.set(0.5, 0.5);
         sprite.x = 0; // Will be set in render
         sprite.y = store.wh / 2;
-        sprite.width = width;
-        sprite.height = height;
+        
+        // Implement object-fit: cover behavior to prevent stretching
+        const containerAspect = width / height;
+        const textureAspect = texture.width / texture.height;
+        
+        if (textureAspect > containerAspect) {
+          // Texture is wider, scale by height and crop sides
+          sprite.height = height;
+          sprite.width = height * textureAspect;
+        } else {
+          // Texture is taller, scale by width and crop top/bottom
+          sprite.width = width;
+          sprite.height = width / textureAspect;
+        }
+        
+        // Create a mask to crop the sprite to the container bounds
+        const mask = new PIXI.Graphics();
+        mask.beginFill(0xffffff);
+        mask.drawRect(-width/2, -height/2, width, height);
+        mask.endFill();
+        mask.x = 0; // Will be set in render
+        mask.y = store.wh / 2;
+        sprite.mask = mask;
+        this.container.addChild(mask);
         
         // Make sprite interactive for hover effects
+        sprite.eventMode = 'static'; // PIXI v8 syntax
         sprite.interactive = true;
         sprite.cursor = 'pointer';
         
-        // Add hover events
+        // Add hover and click events
         sprite.on('pointerover', () => this.onProjectHover(i));
         sprite.on('pointerout', () => this.onProjectOut(i));
+        sprite.on('pointerdown', () => this.onProjectClick(i));
         
         this.container.addChild(sprite);
         
@@ -230,7 +261,13 @@ class SimplePixiSlider {
           el, sprite,
           width, height,
           initialX,
-          projectIndex: i
+          projectIndex: i,
+          mask: mask,
+          originalScale: 1,
+          targetScale: 1,
+          originalZ: 0,
+          targetZ: 0,
+          collapsed: false
         });
       } else {
         console.warn('No texture found for index:', i, 'URL:', textureUrl);
@@ -262,6 +299,9 @@ class SimplePixiSlider {
   }
 
   transformItems() {
+    // Skip normal transform if we're in expanded state or animating
+    if (this.expandedIndex !== null || this.isAnimating) return;
+    
     const containerWidth = this.getContainerWidth();
 
     for (let i = 0; i < this.items.length; i++) {
@@ -274,7 +314,13 @@ class SimplePixiSlider {
       const wrappedX = ((baseX % containerWidth) + containerWidth) % containerWidth;
       
       // Center the sprite
-      item.sprite.x = wrappedX - (containerWidth / 2) + (store.ww / 2);
+      const newX = wrappedX - (containerWidth / 2) + (store.ww / 2);
+      item.sprite.x = newX;
+      
+      // Update mask position to follow sprite
+      if (item.mask) {
+        item.mask.x = newX;
+      }
     }
   }
 
@@ -292,6 +338,9 @@ class SimplePixiSlider {
   }
 
   onDown(e) {
+    // Prevent dragging when expanded
+    if (this.expandedIndex !== null || this.isAnimating) return;
+    
     const { x, y } = this.getPos(e);
     const { flags, on } = this.state;
     
@@ -312,6 +361,9 @@ class SimplePixiSlider {
   }
 
   onMove(e) {
+    // Prevent dragging when expanded
+    if (this.expandedIndex !== null || this.isAnimating) return;
+    
     const { x, y } = this.getPos(e);
     const state = this.state;
     
@@ -331,6 +383,9 @@ class SimplePixiSlider {
 
   onWheel(e) {
     e.preventDefault();
+    
+    // Prevent scrolling when expanded
+    if (this.expandedIndex !== null || this.isAnimating) return;
     
     const state = this.state;
     const wheelSpeed = 15; // Even lower sensitivity for more relaxed feel
@@ -409,6 +464,157 @@ class SimplePixiSlider {
     }
   }
 
+
+  onProjectClick(index) {
+    console.log('Click detected on image:', index);
+    if (this.isAnimating) return;
+    
+    if (this.expandedIndex === index) {
+      // If clicking the already expanded image, collapse all
+      this.collapseAll();
+    } else {
+      // Expand the clicked image and collapse others
+      this.expandImage(index);
+    }
+  }
+
+  expandImage(index) {
+    console.log('Expanding image:', index);
+    this.isAnimating = true;
+    this.expandedIndex = index;
+    
+    // Stop the slider movement
+    this.state.flags.dragging = false;
+    
+    // Get clicked item position and store original positions
+    const clickedItem = this.items[index];
+    const clickedX = clickedItem.sprite.x;
+    
+    // Store original positions for all items
+    this.items.forEach((item, i) => {
+      item.originalX = item.sprite.x;
+      item.maskOriginalX = item.mask ? item.mask.x : item.sprite.x;
+    });
+    
+    // First, reorder sprites so clicked image is on top
+    const sortedIndices = [];
+    // Add others first (background)
+    for (let i = 0; i < this.items.length; i++) {
+      if (i !== index) {
+        sortedIndices.push(i);
+      }
+    }
+    // Add clicked image last (foreground)
+    sortedIndices.push(index);
+    
+    // Reorder all children in container
+    const allChildren = [...this.container.children];
+    
+    sortedIndices.forEach((idx) => {
+      const item = this.items[idx];
+      // Move both sprite and mask to front
+      if (item.mask) {
+        this.container.setChildIndex(item.mask, this.container.children.length - 1);
+      }
+      this.container.setChildIndex(item.sprite, this.container.children.length - 1);
+    });
+    
+    // Animate all items
+    this.items.forEach((item, i) => {
+      if (i === index) {
+        // Clicked image stays exactly in place - no movement at all
+        // Just wait for the animation to complete
+        gsap.delayedCall(0.8, () => {
+          this.isAnimating = false;
+        });
+      } else {
+        // Other images: slide exactly behind clicked image
+        item.collapsed = true;
+        
+        // All images go to exact same position as clicked image
+        const targetX = clickedX;
+        
+        // Calculate delay based on distance
+        const distance = Math.abs(i - index);
+        
+        // Animate position
+        const animProps = {
+          x: item.sprite.x,
+          alpha: item.sprite.alpha
+        };
+        
+        gsap.to(animProps, {
+          x: targetX,
+          alpha: 0.3, // More transparency to clearly show they're behind
+          duration: 0.6,
+          delay: distance * 0.05, // Faster stagger
+          ease: "power2.inOut",
+          onUpdate: () => {
+            item.sprite.x = animProps.x;
+            item.sprite.alpha = animProps.alpha;
+          }
+        });
+        
+        // Also move the mask to exact same position
+        if (item.mask) {
+          const maskAnim = { x: item.mask.x };
+          gsap.to(maskAnim, {
+            x: targetX,
+            duration: 0.6,
+            delay: distance * 0.05,
+            ease: "power2.inOut",
+            onUpdate: () => {
+              item.mask.x = maskAnim.x;
+            }
+          });
+        }
+      }
+    });
+  }
+
+  collapseAll() {
+    console.log('Collapsing all images');
+    this.isAnimating = true;
+    this.expandedIndex = null;
+    
+    // Reset all items to original positions
+    this.items.forEach((item, i) => {
+      item.collapsed = false;
+      
+      // Get original position (if stored) or calculate it
+      const targetX = item.originalX || item.initialX + this.state.current;
+      const maskTargetX = item.maskOriginalX || targetX;
+      
+      // Animate back to original state
+      const animProps = {
+        x: item.sprite.x,
+        alpha: item.sprite.alpha,
+        maskX: item.mask ? item.mask.x : 0
+      };
+      
+      gsap.to(animProps, {
+        x: targetX,
+        alpha: 1,
+        maskX: maskTargetX,
+        duration: 0.6,
+        ease: "power2.out",
+        onUpdate: () => {
+          item.sprite.x = animProps.x;
+          item.sprite.alpha = animProps.alpha;
+          if (item.mask) {
+            item.mask.x = animProps.maskX;
+          }
+        },
+        onComplete: () => {
+          if (i === this.items.length - 1) {
+            this.isAnimating = false;
+            // Force a render update to restore positions
+            this.state.target = this.state.current;
+          }
+        }
+      });
+    });
+  }
 
   updateProjectDescription(index) {
     const projectData = [
