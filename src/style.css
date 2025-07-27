@@ -7,14 +7,13 @@
 
 html, body{
   height: 100%;
-  overflow: hidden;
 }
 
 body{
   position: relative;
-  overflow: hidden;
   background-color: #fff;
   font-family: 'PSTimesTrial', serif;
+  overflow-x: hidden;
 }
 
 * {
@@ -371,4 +370,105 @@ body{
     .project-details {
         font-size: 11px;
     }
+}
+
+/* Project Detail Page Styles */
+.back-button {
+    position: fixed;
+    top: 60px;
+    left: 60px;
+    color: rgba(0, 0, 0, 0.8);
+    text-decoration: none;
+    font-size: 18px;
+    z-index: 100;
+    transition: opacity 0.3s;
+}
+
+.back-button:hover {
+    opacity: 0.6;
+}
+
+.project-content {
+    opacity: 0;
+    transition: opacity 1s ease;
+}
+
+.project-content.visible {
+    opacity: 1;
+}
+
+.project-hero {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    z-index: 5;
+}
+
+.project-hero-image {
+    width: calc(18vw * 1.1);
+    height: calc(18vw * 1.1);
+    object-fit: cover;
+    transform-origin: center;
+}
+
+.project-detail-title {
+    font-size: 48px;
+    font-weight: 400;
+    margin-bottom: 20px;
+}
+
+.project-meta {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 60px;
+    font-size: 16px;
+    color: rgba(0, 0, 0, 0.6);
+}
+
+.project-detail-description {
+    max-width: 800px;
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(0, 0, 0, 0.8);
+}
+
+.project-detail-description h2 {
+    font-size: 24px;
+    font-weight: 400;
+    margin: 40px 0 20px;
+}
+
+.project-credits {
+    margin-top: 80px;
+    padding-top: 40px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.project-credits h3 {
+    font-size: 20px;
+    font-weight: 400;
+    margin-bottom: 20px;
+}
+
+.project-credits p {
+    font-size: 16px;
+    color: rgba(0, 0, 0, 0.6);
+    margin-bottom: 8px;
+}
+
+/* Barba transitions */
+.barba-leave-active,
+.barba-enter-active {
+    transition: opacity 0.5s;
+}
+
+.barba-leave-to,
+.barba-enter {
+    opacity: 0;
 }

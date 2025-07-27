@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { gsap } from 'gsap';
+import barba from '@barba/core';
 
 // Simple PIXI.js slider based on modulus concept
 const store = {
@@ -119,14 +120,23 @@ class SimplePixiSlider {
     ];
 
     const textures = {};
+    
+    // Check if assets are already loaded to prevent cache warnings
     for (let i = 0; i < imageUrls.length; i++) {
       const url = imageUrls[i];
       try {
-        const texture = await PIXI.Assets.load(url);
+        let texture;
         
-        // Set high-quality texture settings
-        texture.source.scaleMode = 'linear';
-        texture.source.mipmap = true;
+        // Check if already in cache
+        if (PIXI.Assets.cache.has(url)) {
+          texture = PIXI.Assets.cache.get(url);
+        } else {
+          texture = await PIXI.Assets.load(url);
+          
+          // Set high-quality texture settings
+          texture.source.scaleMode = 'linear';
+          texture.source.mipmap = true;
+        }
         
         // Store texture with both relative and absolute URL
         textures[url] = texture;
@@ -171,12 +181,17 @@ class SimplePixiSlider {
     }
     ctx.putImageData(imageData, 0, 0);
     
-    // Create PIXI texture from canvas
+    // Create PIXI texture from canvas with proper style
     const texture = PIXI.Texture.from(canvas);
-    this.displacementSprite = new PIXI.Sprite(texture);
     
-    // Make it repeat - using PIXI v8 syntax
-    this.displacementSprite.texture.source.style.addressMode = 'repeat';
+    // Set texture style using PIXI v8 syntax
+    if (texture.source && texture.source.style) {
+      texture.source.style.addressMode = 'repeat';
+      texture.source.style.addressModeU = 'repeat';
+      texture.source.style.addressModeV = 'repeat';
+    }
+    
+    this.displacementSprite = new PIXI.Sprite(texture);
     
     // Scale to cover screen
     const scale = Math.max(store.ww / 512, store.wh / 512);
@@ -232,9 +247,8 @@ class SimplePixiSlider {
         
         // Create a mask to crop the sprite to the container bounds
         const mask = new PIXI.Graphics();
-        mask.beginFill(0xffffff);
-        mask.drawRect(-width/2, -height/2, width, height);
-        mask.endFill();
+        mask.rect(-width/2, -height/2, width, height);
+        mask.fill(0xffffff);
         mask.x = 0; // Will be set in render
         mask.y = store.wh / 2;
         sprite.mask = mask;
@@ -439,7 +453,6 @@ class SimplePixiSlider {
     // Start fade in after delay (shorter on mobile for better UX)
     const delay = store.isDevice ? 500 : 1000;
     this.fadeTimeout = setTimeout(() => {
-      this.updateProjectDescription(index);
       if (this.ui.projectDescription) {
         this.ui.projectDescription.classList.add('visible');
       }
@@ -466,20 +479,20 @@ class SimplePixiSlider {
 
 
   onProjectClick(index) {
-    console.log('Click detected on image:', index);
     if (this.isAnimating) return;
     
     if (this.expandedIndex === index) {
       // If clicking the already expanded image, collapse all
       this.collapseAll();
     } else {
+      // Store clicked index globally for transition
+      window.clickedProjectIndex = index;
       // Expand the clicked image and collapse others
       this.expandImage(index);
     }
   }
 
   expandImage(index) {
-    console.log('Expanding image:', index);
     this.isAnimating = true;
     this.expandedIndex = index;
     
@@ -553,6 +566,24 @@ class SimplePixiSlider {
         onComplete: () => {
           if (isClicked) {
             this.isAnimating = false;
+            
+            // Capture the final sprite state
+            console.log('Capturing sprite for index:', index);
+            const dataUrl = this.captureSprite(item);
+            const htmlImage = this.createHTMLTransitionImage(item, dataUrl);
+            
+            // Store for transition
+            window.transitionImage = htmlImage;
+            window.finalSpritePosition = {
+              x: item.sprite.x,
+              y: item.sprite.y,
+              scale: item.sprite.scale.x
+            };
+            
+            console.log('Transition image created, navigating...');
+            
+            // Navigate to project page
+            barba.go(`./project.html?id=${index + 1}`);
           }
         }
       });
@@ -564,7 +595,6 @@ class SimplePixiSlider {
   }
 
   collapseAll() {
-    console.log('Collapsing all images');
     this.isAnimating = true;
     this.expandedIndex = null;
     
@@ -608,69 +638,303 @@ class SimplePixiSlider {
     });
   }
 
-  updateProjectDescription(index) {
-    const projectData = [
-      {
-        title: "Visual Identity Design",
-        description: "Complete brand identity system including logo design, color palette, typography, and brand guidelines for a modern tech startup."
-      },
-      {
-        title: "E-commerce Platform",
-        description: "Full-stack development of a responsive e-commerce platform with custom CMS, payment integration, and advanced filtering capabilities."
-      },
-      {
-        title: "Interactive Installation", 
-        description: "Motion-activated art installation combining physical sensors with digital projections for an immersive gallery experience."
-      },
-      {
-        title: "Mobile App Design",
-        description: "UX/UI design for a fitness tracking app featuring intuitive navigation, data visualization, and seamless user experience across devices."
-      },
-      {
-        title: "3D Product Visualization",
-        description: "High-fidelity 3D modeling and rendering for product showcase, featuring realistic materials, lighting, and interactive elements."
-      },
-      {
-        title: "Web Animation Series",
-        description: "Collection of micro-interactions and animations for web interfaces, focusing on performance optimization and user engagement."
-      },
-      {
-        title: "Digital Magazine Layout",
-        description: "Editorial design for digital publication with adaptive layouts, interactive elements, and optimized reading experience."
-      }
-    ];
-
-    if (index >= 0 && index < projectData.length) {
-      if (this.ui.projectTitle) {
-        this.ui.projectTitle.textContent = projectData[index].title;
-      }
-      if (this.ui.projectDetails) {
-        this.ui.projectDetails.textContent = projectData[index].description;
-      }
-    } else {
-      // Default state
-      if (this.ui.projectTitle) {
-        this.ui.projectTitle.textContent = "Portfolio Overview";
-      }
-      if (this.ui.projectDetails) {
-        this.ui.projectDetails.textContent = "Hover over any project image to explore detailed information about the creative process, technologies used, and design solutions implemented.";
-      }
-    }
+  captureSprite(item) {
+    // Create a temporary render texture to capture the sprite - exact same size
+    const renderTexture = PIXI.RenderTexture.create({
+      width: item.width,
+      height: item.height
+    });
+    
+    // Create a temporary container for clean rendering
+    const tempContainer = new PIXI.Container();
+    const tempSprite = new PIXI.Sprite(item.sprite.texture);
+    
+    // Copy sprite properties - exact same scale
+    tempSprite.anchor.set(0.5);
+    tempSprite.scale.set(item.sprite.scale.x);
+    tempSprite.x = item.width / 2;
+    tempSprite.y = item.height / 2;
+    
+    // Create matching mask for clean crop - exact same size
+    const tempMask = new PIXI.Graphics();
+    tempMask.rect(0, 0, item.width, item.height);
+    tempMask.fill(0xffffff);
+    
+    // Set mask without affecting original sprite
+    tempSprite.mask = tempMask;
+    
+    tempContainer.addChild(tempMask);
+    tempContainer.addChild(tempSprite);
+    
+    // Render to texture using PIXI v8 syntax
+    this.app.renderer.render({
+      container: tempContainer,
+      target: renderTexture
+    });
+    
+    // Convert to canvas
+    const canvas = this.app.renderer.extract.canvas(renderTexture);
+    
+    // Clean up properly to avoid texture warnings
+    // Remove mask first to avoid issues
+    tempSprite.mask = null;
+    
+    // Destroy children individually
+    tempMask.destroy();
+    tempSprite.destroy({
+      texture: false, // Don't destroy the original texture
+      baseTexture: false
+    });
+    
+    // Destroy container
+    tempContainer.destroy({
+      children: false, // Already destroyed manually
+      texture: false,
+      baseTexture: false
+    });
+    
+    // Destroy render texture
+    renderTexture.destroy(true);
+    
+    return canvas.toDataURL();
   }
 
-  destroy() {
+  createHTMLTransitionImage(item, dataUrl) {
+    // Create HTML image element for transition
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.style.position = 'fixed';
+    img.style.width = `${item.width}px`;  // Exact same size, no scaling
+    img.style.height = `${item.height}px`; // Exact same size, no scaling  
+    img.style.left = `${item.sprite.x - item.width / 2}px`;
+    img.style.top = `${item.sprite.y - item.height / 2}px`;
+    img.style.zIndex = '9999';
+    img.style.objectFit = 'cover';
+    img.style.transition = 'none';
+    img.style.opacity = '1'; // Start visible
+    img.style.pointerEvents = 'none';
+    img.className = 'transition-image';
+    
+    document.body.appendChild(img);
+    return img;
+  }
+
+
+  async destroy() {
     this.off();
+    
+    // Properly unload assets using PIXI v8 Assets API
+    try {
+      const basePath = window.location.hostname === 'localhost' ? './img/' : '/portfolio_clean/';
+      const imageUrls = [
+        basePath + 'project-1.png',
+        basePath + 'project-2.png', 
+        basePath + 'project-3.png',
+        basePath + 'project-4.png',
+        basePath + 'project-5.png',
+        basePath + 'project-6.png',
+        basePath + 'project-7.png'
+      ];
+      
+      // Unload assets properly
+      await PIXI.Assets.unload(imageUrls);
+    } catch (error) {
+      console.warn('Error unloading assets:', error);
+    }
+    
     if (this.app) {
       this.app.destroy(true, true);
     }
   }
 }
 
-// Initialize
-const slider = new SimplePixiSlider(document.querySelector('.js-slider'));
+// Initialize slider only on home page
+let slider = null;
+let ticker = null;
 
-const tick = () => {
-  slider.render();
-};
+function initSlider() {
+  const sliderEl = document.querySelector('.js-slider');
+  if (sliderEl && !slider) {
+    slider = new SimplePixiSlider(sliderEl);
+    ticker = () => slider.render();
+    gsap.ticker.add(ticker);
+  }
+}
 
-gsap.ticker.add(tick);
+async function destroySlider() {
+  if (slider) {
+    if (ticker) gsap.ticker.remove(ticker);
+    await slider.destroy();
+    slider = null;
+    ticker = null;
+  }
+}
+
+// Initialize Barba.js
+barba.init({
+  transitions: [{
+    name: 'project-transition',
+    from: {
+      namespace: 'home'
+    },
+    to: {
+      namespace: 'project'
+    },
+    leave(data) {
+      // Keep overflow hidden during transition
+      document.body.style.overflow = 'hidden';
+      
+      // Fade out only the UI elements, keep PIXI visible
+      const uiOverlay = data.current.container.querySelector('.ui-overlay');
+      const sliderHTML = data.current.container.querySelector('.slider');
+      
+      return gsap.timeline()
+        .to([uiOverlay, sliderHTML], {
+          opacity: 0,
+          duration: 0.3,
+          ease: 'power2.inOut'
+        })
+        .call(() => {
+          // Start the handoff from PIXI to HTML
+          if (window.transitionImage) {
+            console.log('Handoff: transition image exists, making visible');
+            window.transitionImage.style.opacity = '1';
+            window.transitionImage.style.zIndex = '9999';
+            
+            // Hide canvas gradually
+            const canvas = document.querySelector('canvas');
+            if (canvas) {
+              gsap.to(canvas, {
+                opacity: 0,
+                duration: 0.2
+              });
+            }
+          } else {
+            console.log('Warning: No transition image found!');
+          }
+        });
+    },
+    enter(data) {
+      // Keep overflow hidden - project page doesn't need scrolling
+      document.body.style.overflow = 'hidden';
+      
+      // Get the clicked project index
+      const projectIndex = window.clickedProjectIndex || 0;
+      
+      // Hide project content initially
+      const content = data.next.container.querySelector('.project-content');
+      if (content) content.style.opacity = '0';
+      
+      // Update project content
+      const container = data.next.container;
+      const heroImg = container.querySelector('.project-hero-image');
+      
+      if (heroImg) {
+        heroImg.src = `./img/project-${projectIndex + 1}.png`;
+        heroImg.style.opacity = '0'; // Hide initially
+      }
+      
+      // Use the captured HTML image for transition
+      if (window.transitionImage) {
+        console.log('Enter: Using transition image for animation');
+        
+        // Create final animation timeline
+        const timeline = gsap.timeline();
+        
+        // First, ensure transition image is visible
+        timeline.call(() => {
+          console.log('Enter: Ensuring transition image visibility');
+          window.transitionImage.style.opacity = '1';
+          window.transitionImage.style.zIndex = '9999';
+        })
+        // Keep transition image - no switching needed
+        .call(() => {
+          // Just keep the transition image, don't switch to hero image
+          // This prevents any brightness/filter differences
+          if (heroImg) {
+            heroImg.style.display = 'none'; // Hide hero image completely
+          }
+          
+          // Keep transition image as the final state
+          if (window.transitionImage) {
+            window.transitionImage.style.zIndex = '9999';
+            // Don't remove it - it IS the final image
+          }
+        })
+        .to(content, {
+          opacity: 1,
+          duration: 0.6
+        }, '-=0.4');
+        
+        return timeline;
+      }
+      
+      // Fallback if no slider
+      return gsap.to(data.next.container, {
+        opacity: 1,
+        duration: 0.5
+      });
+    },
+    afterEnter() {
+      // Keep overflow hidden on project page
+      document.body.style.overflow = 'hidden';
+      
+      // Clean up PIXI and transition elements
+      const canvas = document.querySelector('canvas');
+      if (canvas) {
+        canvas.remove();
+      }
+      
+      // Keep transition image - it's now the permanent image
+      // Don't remove it in cleanup
+      
+      // Clean up global state
+      window.finalSpritePosition = null;
+      window.clickedProjectIndex = null;
+      
+      // Destroy slider for memory cleanup
+      destroySlider().catch(console.warn);
+    },
+    beforeLeave() {
+      // Disable scrolling when leaving home
+      document.body.style.overflow = 'hidden';
+    }
+  }, {
+    name: 'project-to-home',
+    from: {
+      namespace: 'project'
+    },
+    to: {
+      namespace: 'home'
+    },
+    leave(data) {
+      // Clean up transition image when leaving project page
+      if (window.transitionImage) {
+        window.transitionImage.remove();
+        window.transitionImage = null;
+      }
+      
+      return gsap.to(data.current.container, {
+        opacity: 0,
+        duration: 0.5
+      });
+    },
+    enter(data) {
+      initSlider();
+      return gsap.fromTo(data.next.container, 
+        { opacity: 0 },
+        { opacity: 1, duration: 0.5 }
+      );
+    }
+  }]
+});
+
+// Initialize on first load
+initSlider();
+
+// Set initial overflow based on current page
+if (document.querySelector('[data-barba-namespace="home"]')) {
+  document.body.style.overflow = 'hidden';
+} else {
+  document.body.style.overflow = 'auto';
+}
