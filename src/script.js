@@ -519,55 +519,46 @@ class SimplePixiSlider {
       this.container.setChildIndex(item.sprite, this.container.children.length - 1);
     });
     
+    // Calculate center of screen
+    const centerX = store.ww / 2;
+    
     // Animate all items
     this.items.forEach((item, i) => {
-      if (i === index) {
-        // Clicked image stays exactly in place - no movement at all
-        // Just wait for the animation to complete
-        gsap.delayedCall(0.8, () => {
-          this.isAnimating = false;
-        });
-      } else {
-        // Other images: slide exactly behind clicked image
-        item.collapsed = true;
-        
-        // All images go to exact same position as clicked image
-        const targetX = clickedX;
-        
-        // Calculate delay based on distance
-        const distance = Math.abs(i - index);
-        
-        // Animate position
-        const animProps = {
-          x: item.sprite.x,
-          alpha: item.sprite.alpha
-        };
-        
-        gsap.to(animProps, {
-          x: targetX,
-          alpha: 0.3, // More transparency to clearly show they're behind
-          duration: 0.6,
-          delay: distance * 0.05, // Faster stagger
-          ease: "power2.inOut",
-          onUpdate: () => {
-            item.sprite.x = animProps.x;
-            item.sprite.alpha = animProps.alpha;
+      const distance = Math.abs(i - index);
+      const isClicked = i === index;
+      
+      // Calculate stagger delay - closer items move first
+      const delay = isClicked ? 0 : distance * 0.03;
+      
+      // Animate to center
+      const targetX = centerX;
+      
+      const animProps = {
+        x: item.sprite.x,
+        maskX: item.mask ? item.mask.x : item.sprite.x
+      };
+      
+      gsap.to(animProps, {
+        x: targetX,
+        maskX: targetX,
+        duration: 1.2,
+        delay: delay,
+        ease: "power3.inOut",
+        onUpdate: () => {
+          item.sprite.x = animProps.x;
+          if (item.mask) {
+            item.mask.x = animProps.maskX;
           }
-        });
-        
-        // Also move the mask to exact same position
-        if (item.mask) {
-          const maskAnim = { x: item.mask.x };
-          gsap.to(maskAnim, {
-            x: targetX,
-            duration: 0.6,
-            delay: distance * 0.05,
-            ease: "power2.inOut",
-            onUpdate: () => {
-              item.mask.x = maskAnim.x;
-            }
-          });
+        },
+        onComplete: () => {
+          if (isClicked) {
+            this.isAnimating = false;
+          }
         }
+      });
+      
+      if (!isClicked) {
+        item.collapsed = true;
       }
     });
   }
@@ -581,9 +572,9 @@ class SimplePixiSlider {
     this.items.forEach((item, i) => {
       item.collapsed = false;
       
-      // Get original position (if stored) or calculate it
-      const targetX = item.originalX || item.initialX + this.state.current;
-      const maskTargetX = item.maskOriginalX || targetX;
+      // Use stored original position
+      const targetX = item.originalX;
+      const maskTargetX = item.maskOriginalX;
       
       // Animate back to original state
       const animProps = {
@@ -596,8 +587,9 @@ class SimplePixiSlider {
         x: targetX,
         alpha: 1,
         maskX: maskTargetX,
-        duration: 0.6,
-        ease: "power2.out",
+        duration: 1.0,
+        delay: i * 0.02, // Small stagger for smooth effect
+        ease: "power3.inOut",
         onUpdate: () => {
           item.sprite.x = animProps.x;
           item.sprite.alpha = animProps.alpha;
