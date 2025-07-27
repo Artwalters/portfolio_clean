@@ -16,6 +16,16 @@ body{
   overflow-x: hidden;
 }
 
+/* Hide scrollbar for all browsers */
+html {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+html::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
 /* Transition states */
 .is-transitioning {
   pointer-events: none;
@@ -399,8 +409,7 @@ body{
 }
 
 .project-content {
-    opacity: 0;
-    transition: opacity 1s ease;
+    opacity: 1;
 }
 
 .project-content.visible {
@@ -531,13 +540,4 @@ body{
     margin-bottom: 8px;
 }
 
-/* Barba transitions */
-.barba-leave-active,
-.barba-enter-active {
-    transition: opacity 0.5s;
-}
-
-.barba-leave-to,
-.barba-enter {
-    opacity: 0;
-}
+/* Barba transitions - removed for instant transitions */

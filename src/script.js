@@ -779,9 +779,17 @@ barba.init({
     to: {
       namespace: 'project'
     },
-    beforeEnter(data) {
+    async beforeEnter(data) {
       // Hide the new page BEFORE it becomes visible
       data.next.container.style.opacity = '0';
+      
+      // Preload hero image to prevent flicker
+      const heroImg = data.next.container.querySelector('.project-hero-image');
+      if (heroImg && heroImg.src) {
+        const img = new Image();
+        img.src = heroImg.src;
+        await img.decode().catch(() => {}); // Wait for image to load
+      }
     },
     leave(data) {
       // Disable wheel events to prevent scroll blocking
@@ -813,25 +821,49 @@ barba.init({
       document.body.style.overflow = 'auto';
       
       // Get elements
-      const content = data.next.container.querySelector('.project-content');
       const heroImg = data.next.container.querySelector('.project-hero-image');
       
-      // Show hero image instantly at normal slider size
-      if (heroImg) {
+      // CRUCIAL: Position hero image EXACTLY where transition image is
+      if (heroImg && window.transitionImage) {
+        // Get transition image position
+        const rect = window.transitionImage.getBoundingClientRect();
+        
+        // Apply exact position to hero image
+        heroImg.style.position = 'fixed';
+        heroImg.style.left = rect.left + 'px';
+        heroImg.style.top = rect.top + 'px';
+        heroImg.style.width = rect.width + 'px';
+        heroImg.style.height = rect.height + 'px';
+        heroImg.style.zIndex = '10000'; // Above transition image
         heroImg.style.opacity = '1';
-        heroImg.style.transform = 'scale(1)'; // Same size as slider
-      }
-      
-      // Show content instantly
-      if (content) content.style.opacity = '1';
-      
-      // NOW show the whole page
-      data.next.container.style.opacity = '1';
-      
-      // Clean up transition image
-      if (window.transitionImage) {
+        heroImg.style.transform = 'none';
+        heroImg.style.transition = 'none';
+        
+        // Force layout
+        heroImg.offsetHeight;
+        
+        // Now remove transition image
         window.transitionImage.remove();
         window.transitionImage = null;
+        
+        // Show the page
+        data.next.container.style.opacity = '1';
+        
+        // Reset hero to normal position instantly
+        heroImg.style.position = '';
+        heroImg.style.left = '';
+        heroImg.style.top = '';
+        heroImg.style.width = '';
+        heroImg.style.height = '';
+        heroImg.style.zIndex = '';
+        heroImg.style.transform = '';
+      } else {
+        // Fallback if no transition image
+        if (heroImg) {
+          heroImg.style.opacity = '1';
+          heroImg.style.transform = 'scale(1)';
+        }
+        data.next.container.style.opacity = '1';
       }
       
       return gsap.timeline(); // Empty timeline - no animations
