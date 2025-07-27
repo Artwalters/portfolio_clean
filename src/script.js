@@ -846,6 +846,13 @@ barba.init({
           console.log('Enter: Ensuring transition image visibility');
           window.transitionImage.style.opacity = '1';
           window.transitionImage.style.zIndex = '9999';
+          window.transitionImage.style.transformOrigin = 'center center';
+        })
+        // Scale the transition image to 1.5x
+        .to(window.transitionImage, {
+          scale: 1.5,
+          duration: 0.8,
+          ease: 'power2.out'
         })
         // Keep transition image - no switching needed
         .call(() => {
@@ -860,7 +867,7 @@ barba.init({
             window.transitionImage.style.zIndex = '9999';
             // Don't remove it - it IS the final image
           }
-        })
+        }, null, '-=0.6')
         .to(content, {
           opacity: 1,
           duration: 0.6
