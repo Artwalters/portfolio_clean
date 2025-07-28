@@ -629,19 +629,9 @@ class SimplePixiSlider {
       // Calculate stagger delay - closer items move first
       const delay = isClicked ? 0 : distance * 0.03;
       
-      // Calculate target position based on device
-      let targetX, targetY;
-      if (store.isDevice) {
-        // Mobile: stack vertically towards bottom of screen
-        targetX = centerX;
-        // Stack images with slight offset for depth effect
-        const stackOffset = (i - index) * 10; // Small offset for each image
-        targetY = store.wh * 0.7 + stackOffset; // Stack near bottom of screen
-      } else {
-        // Desktop: all to center
-        targetX = centerX;
-        targetY = centerY;
-      }
+      // All images animate to exact center on both mobile and desktop
+      const targetX = centerX;
+      const targetY = centerY;
       
       const animProps = {
         x: item.sprite.x,
