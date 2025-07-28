@@ -19,6 +19,17 @@ const store = {
   || navigator.userAgent.match(/Windows Phone/i)
 }
 
+// Fix mobile viewport height issue for consistent positioning
+function updateViewportHeight() {
+  // Use actual viewport height for both CSS and JS
+  const vh = window.innerHeight * 0.01;
+  document.documentElement.style.setProperty('--vh', `${vh}px`);
+}
+
+// Initialize viewport height fix
+updateViewportHeight();
+window.addEventListener('resize', updateViewportHeight);
+
 //! ========================================
 //! 2. SIMPLERPIXISLIDER CLASS - CONSTRUCTOR & INITIALISATIE
 //! ========================================
