@@ -1,3 +1,7 @@
+//! ========================================
+//! 1. IMPORTS EN GLOBAL STORE CONFIGURATIE
+//! ========================================
+
 import * as PIXI from 'pixi.js';
 import { gsap } from 'gsap';
 import barba from '@barba/core';
@@ -14,6 +18,10 @@ const store = {
   || navigator.userAgent.match(/BlackBerry/i)
   || navigator.userAgent.match(/Windows Phone/i)
 }
+
+//! ========================================
+//! 2. SIMPLERPIXISLIDER CLASS - CONSTRUCTOR & INITIALISATIE
+//! ========================================
 
 class SimplePixiSlider {
   constructor(el, opts = {}) {
@@ -39,7 +47,8 @@ class SimplePixiSlider {
       direction: 0,
       on: { x: 0, y: 0 },
       off: 0,
-      flags: { dragging: false }
+      flags: { dragging: false },
+      isVertical: store.isDevice // Mobile = vertical, Desktop = horizontal
     };
 
     this.items = [];
@@ -72,6 +81,10 @@ class SimplePixiSlider {
       this.ui.projectDescription.classList.remove('visible');
     }
   }
+
+  //! ========================================
+  //! 3. PIXI.JS SETUP & TEXTURE LOADING
+  //! ========================================
 
   async setupPixi() {
     // Create PIXI application with mobile optimizations
@@ -228,8 +241,15 @@ class SimplePixiSlider {
         
         // Position sprite with centered anchor
         sprite.anchor.set(0.5, 0.5);
-        sprite.x = 0; // Will be set in render
-        sprite.y = store.wh / 2;
+        if (store.isDevice) {
+          // Mobile: vertical layout
+          sprite.x = store.ww / 2;
+          sprite.y = 0; // Will be set in render
+        } else {
+          // Desktop: horizontal layout
+          sprite.x = 0; // Will be set in render
+          sprite.y = store.wh / 2;
+        }
         
         // Implement object-fit: cover behavior to prevent stretching
         const containerAspect = width / height;
@@ -249,8 +269,15 @@ class SimplePixiSlider {
         const mask = new PIXI.Graphics();
         mask.rect(-width/2, -height/2, width, height);
         mask.fill(0xffffff);
-        mask.x = 0; // Will be set in render
-        mask.y = store.wh / 2;
+        if (store.isDevice) {
+          // Mobile: vertical layout
+          mask.x = store.ww / 2;
+          mask.y = 0; // Will be set in render
+        } else {
+          // Desktop: horizontal layout
+          mask.x = 0; // Will be set in render
+          mask.y = store.wh / 2;
+        }
         sprite.mask = mask;
         this.container.addChild(mask);
         
@@ -268,13 +295,15 @@ class SimplePixiSlider {
         
         // Calculate initial position for modulus wrapping
         const spacing = store.isDevice ? 30 : 50;
-        const initialX = i * (width + spacing);
+        const initialX = store.isDevice ? 0 : i * (width + spacing);
+        const initialY = store.isDevice ? i * (height + spacing) : 0;
         
         // Push to cache
         this.items.push({
           el, sprite,
           width, height,
           initialX,
+          initialY,
           projectIndex: i,
           mask: mask,
           originalScale: 1,
@@ -289,6 +318,10 @@ class SimplePixiSlider {
     }
   }
 
+  //! ========================================
+  //! 4. SLIDER INTERACTIE - MOUSE/TOUCH EVENTS & RENDERING
+  //! ========================================
+
   calc() {
     const state = this.state;
     const prevCurrent = state.current;
@@ -302,8 +335,15 @@ class SimplePixiSlider {
     if (this.displacementFilter) {
       const intensity = store.isDevice ? 4 : 8; // Less intense on mobile
       const scaleValue = intensity * state.direction * Math.abs(scroll);
-      this.displacementFilter.scale.x = scaleValue;
-      this.displacementFilter.scale.y = 0;
+      if (store.isDevice) {
+        // Mobile: vertical displacement
+        this.displacementFilter.scale.x = 0;
+        this.displacementFilter.scale.y = scaleValue;
+      } else {
+        // Desktop: horizontal displacement
+        this.displacementFilter.scale.x = scaleValue;
+        this.displacementFilter.scale.y = 0;
+      }
     }
   }
 
@@ -316,24 +356,49 @@ class SimplePixiSlider {
     // Skip normal transform if we're in expanded state or animating
     if (this.expandedIndex !== null || this.isAnimating) return;
     
-    const containerWidth = this.getContainerWidth();
+    if (store.isDevice) {
+      // Mobile: vertical scrolling
+      const containerHeight = this.getContainerHeight();
 
-    for (let i = 0; i < this.items.length; i++) {
-      const item = this.items[i];
-      
-      if (!item || !item.sprite) continue;
-      
-      // Simple modulus-based positioning like the example
-      const baseX = item.initialX + this.state.current;
-      const wrappedX = ((baseX % containerWidth) + containerWidth) % containerWidth;
-      
-      // Center the sprite
-      const newX = wrappedX - (containerWidth / 2) + (store.ww / 2);
-      item.sprite.x = newX;
-      
-      // Update mask position to follow sprite
-      if (item.mask) {
-        item.mask.x = newX;
+      for (let i = 0; i < this.items.length; i++) {
+        const item = this.items[i];
+        
+        if (!item || !item.sprite) continue;
+        
+        // Simple modulus-based positioning for vertical
+        const baseY = item.initialY + this.state.current;
+        const wrappedY = ((baseY % containerHeight) + containerHeight) % containerHeight;
+        
+        // Center the sprite vertically
+        const newY = wrappedY - (containerHeight / 2) + (store.wh / 2);
+        item.sprite.y = newY;
+        
+        // Update mask position to follow sprite
+        if (item.mask) {
+          item.mask.y = newY;
+        }
+      }
+    } else {
+      // Desktop: horizontal scrolling
+      const containerWidth = this.getContainerWidth();
+
+      for (let i = 0; i < this.items.length; i++) {
+        const item = this.items[i];
+        
+        if (!item || !item.sprite) continue;
+        
+        // Simple modulus-based positioning like the example
+        const baseX = item.initialX + this.state.current;
+        const wrappedX = ((baseX % containerWidth) + containerWidth) % containerWidth;
+        
+        // Center the sprite
+        const newX = wrappedX - (containerWidth / 2) + (store.ww / 2);
+        item.sprite.x = newX;
+        
+        // Update mask position to follow sprite
+        if (item.mask) {
+          item.mask.x = newX;
+        }
       }
     }
   }
@@ -343,6 +408,13 @@ class SimplePixiSlider {
     if (this.items.length === 0) return store.ww;
     const spacing = store.isDevice ? 30 : 50;
     return this.items.length * (this.items[0].width + spacing);
+  }
+  
+  getContainerHeight() {
+    // Calculate total height needed for seamless loop on mobile
+    if (this.items.length === 0) return store.wh;
+    const spacing = store.isDevice ? 30 : 50;
+    return this.items.length * (this.items[0].height + spacing);
   }
   
   getPos({ changedTouches, clientX, clientY, target }) {
@@ -387,12 +459,21 @@ class SimplePixiSlider {
     const moveX = x - on.x;
     const moveY = y - on.y;
 
-    if ((Math.abs(moveX) > Math.abs(moveY)) && e.cancelable) {
-      e.preventDefault();
-      e.stopPropagation();
+    if (store.isDevice) {
+      // Mobile: vertical scrolling
+      if ((Math.abs(moveY) > Math.abs(moveX)) && e.cancelable) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      state.target = off + (moveY * this.opts.speed);
+    } else {
+      // Desktop: horizontal scrolling
+      if ((Math.abs(moveX) > Math.abs(moveY)) && e.cancelable) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      state.target = off + (moveX * this.opts.speed);
     }
-
-    state.target = off + (moveX * this.opts.speed);
   }
 
   onWheel(e) {
@@ -477,6 +558,9 @@ class SimplePixiSlider {
     }
   }
 
+  //! ========================================
+  //! 5. IMAGE EXPAND/COLLAPSE ANIMATIES
+  //! ========================================
 
   onProjectClick(index) {
     if (this.isAnimating) return;
@@ -505,7 +589,9 @@ class SimplePixiSlider {
     // Store original positions for all items
     this.items.forEach((item, i) => {
       item.originalX = item.sprite.x;
+      item.originalY = item.sprite.y;
       item.maskOriginalX = item.mask ? item.mask.x : item.sprite.x;
+      item.maskOriginalY = item.mask ? item.mask.y : item.sprite.y;
     });
     
     // First, reorder sprites so clicked image is on top
@@ -533,6 +619,7 @@ class SimplePixiSlider {
     
     // Calculate center of screen
     const centerX = store.ww / 2;
+    const centerY = store.wh / 2;
     
     // Animate all items
     this.items.forEach((item, i) => {
@@ -542,17 +629,32 @@ class SimplePixiSlider {
       // Calculate stagger delay - closer items move first
       const delay = isClicked ? 0 : distance * 0.03;
       
-      // Animate to center
-      const targetX = centerX;
+      // Calculate target position based on device
+      let targetX, targetY;
+      if (store.isDevice) {
+        // Mobile: stack vertically towards bottom of screen
+        targetX = centerX;
+        // Stack images with slight offset for depth effect
+        const stackOffset = (i - index) * 10; // Small offset for each image
+        targetY = store.wh * 0.7 + stackOffset; // Stack near bottom of screen
+      } else {
+        // Desktop: all to center
+        targetX = centerX;
+        targetY = centerY;
+      }
       
       const animProps = {
         x: item.sprite.x,
-        maskX: item.mask ? item.mask.x : item.sprite.x
+        y: item.sprite.y,
+        maskX: item.mask ? item.mask.x : item.sprite.x,
+        maskY: item.mask ? item.mask.y : item.sprite.y
       };
       
       gsap.to(animProps, {
         x: targetX,
+        y: targetY,
         maskX: targetX,
+        maskY: targetY,
         duration: 1.2,
         delay: delay,
         ease: "power3.inOut",
@@ -560,9 +662,11 @@ class SimplePixiSlider {
           // Check if sprite still exists before updating
           if (item.sprite && item.sprite.parent) {
             item.sprite.x = animProps.x;
+            item.sprite.y = animProps.y;
           }
           if (item.mask && item.mask.parent) {
             item.mask.x = animProps.maskX;
+            item.mask.y = animProps.maskY;
           }
         },
         onComplete: () => {
@@ -606,19 +710,25 @@ class SimplePixiSlider {
       
       // Use stored original position
       const targetX = item.originalX;
+      const targetY = item.originalY || item.sprite.y;
       const maskTargetX = item.maskOriginalX;
+      const maskTargetY = item.maskOriginalY || (item.mask ? item.mask.y : 0);
       
       // Animate back to original state
       const animProps = {
         x: item.sprite.x,
+        y: item.sprite.y,
         alpha: item.sprite.alpha,
-        maskX: item.mask ? item.mask.x : 0
+        maskX: item.mask ? item.mask.x : 0,
+        maskY: item.mask ? item.mask.y : 0
       };
       
       gsap.to(animProps, {
         x: targetX,
+        y: targetY,
         alpha: 1,
         maskX: maskTargetX,
+        maskY: maskTargetY,
         duration: 1.0,
         delay: i * 0.02, // Small stagger for smooth effect
         ease: "power3.inOut",
@@ -626,10 +736,12 @@ class SimplePixiSlider {
           // Check if sprite still exists before updating
           if (item.sprite && item.sprite.parent) {
             item.sprite.x = animProps.x;
+            item.sprite.y = animProps.y;
             item.sprite.alpha = animProps.alpha;
           }
           if (item.mask && item.mask.parent) {
             item.mask.x = animProps.maskX;
+            item.mask.y = animProps.maskY;
           }
         },
         onComplete: () => {
@@ -735,6 +847,7 @@ class SimplePixiSlider {
       if (item.mask) gsap.killTweensOf(item.mask);
     });
     
+    
     // Clean up items array
     this.items.forEach(item => {
       if (item.sprite) {
@@ -774,6 +887,10 @@ class SimplePixiSlider {
   }
 }
 
+//! ========================================
+//! 6. PROJECTHEROEFFECT CLASS VOOR PROJECT DETAIL PAGINA'S
+//! ========================================
+
 // Project Hero Effect class for project pages
 class ProjectHeroEffect {
   constructor() {
@@ -782,6 +899,7 @@ class ProjectHeroEffect {
     this.displacementFilter = null;
     this.heroImage = null;
     this.isInitialized = false;
+    this.sprite = null;
   }
 
   async init() {
@@ -849,7 +967,15 @@ class ProjectHeroEffect {
       sprite.mask = mask;
       this.app.stage.addChild(mask);
       
-      // Add to stage (no displacement effect)
+      // Store sprite reference
+      this.sprite = sprite;
+      
+      // Make sprite interactive for hover effects
+      sprite.eventMode = 'static';
+      sprite.interactive = true;
+      sprite.cursor = 'pointer';
+      
+      // Add to stage
       this.app.stage.addChild(sprite);
 
       // Position canvas exactly like CSS positions hero image
@@ -886,48 +1012,6 @@ class ProjectHeroEffect {
     }
   }
 
-  createNoiseTextureForHero() {
-    // Create canvas for noise texture
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    
-    // Generate perlin-like noise
-    const imageData = ctx.createImageData(512, 512);
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      const x = (i / 4) % 512;
-      const y = Math.floor((i / 4) / 512);
-      
-      // Create wave pattern for better displacement
-      const value1 = Math.sin(x * 0.02) * 127 + 128;
-      const value2 = Math.cos(y * 0.02) * 127 + 128;
-      const noise = (value1 + value2) / 2;
-      
-      imageData.data[i] = noise;     // R
-      imageData.data[i + 1] = noise; // G  
-      imageData.data[i + 2] = noise; // B
-      imageData.data[i + 3] = 255;   // A
-    }
-    ctx.putImageData(imageData, 0, 0);
-    
-    // Create PIXI texture from canvas
-    const texture = PIXI.Texture.from(canvas);
-    
-    // Set texture style using PIXI v8 syntax
-    if (texture.source && texture.source.style) {
-      texture.source.style.addressMode = 'repeat';
-      texture.source.style.addressModeU = 'repeat';
-      texture.source.style.addressModeV = 'repeat';
-    }
-    
-    this.displacementSprite = new PIXI.Sprite(texture);
-    
-    // Get the actual displayed dimensions
-    const rect = this.heroImage.getBoundingClientRect();
-    const scale = Math.max(rect.width / 512, rect.height / 512);
-    this.displacementSprite.scale.set(scale);
-  }
 
   destroy() {
     try {
@@ -958,12 +1042,17 @@ class ProjectHeroEffect {
 
       this.displacementSprite = null;
       this.displacementFilter = null;
+      this.sprite = null;
       this.isInitialized = false;
     } catch (error) {
       console.error('Failed to destroy project hero effect:', error);
     }
   }
 }
+
+//! ========================================
+//! 8. INITIALISATIE & CLEANUP FUNCTIES
+//! ========================================
 
 // Initialize slider only on home page
 let slider = null;
@@ -1001,6 +1090,10 @@ async function destroyProjectHeroEffect() {
     projectHeroEffect = null;
   }
 }
+
+//! ========================================
+//! 7. BARBA.JS PAGE TRANSITIONS
+//! ========================================
 
 // Initialize Barba.js
 barba.init({
@@ -1108,7 +1201,7 @@ barba.init({
       // KEEP SCROLLING ENABLED on project page
       document.body.style.overflow = 'auto';
       
-      // Clean up PIXI canvas
+      // Clean up PIXI canvas from slider
       const canvas = document.querySelector('canvas');
       if (canvas) {
         canvas.remove();
@@ -1119,8 +1212,6 @@ barba.init({
       
       // Destroy slider for memory cleanup
       await destroySlider().catch(console.warn);
-      
-      // Project hero effect already initialized in beforeEnter
     },
     beforeLeave() {
       // Disable scrolling when leaving home
@@ -1163,6 +1254,10 @@ barba.init({
   }]
 });
 
+//! ========================================
+//! 8. PAGE DETECTION & INITIALISATIE
+//! ========================================
+
 // Initialize on first load based on current page
 const currentNamespace = document.querySelector('[data-barba-namespace]')?.getAttribute('data-barba-namespace');
 
@@ -1175,6 +1270,10 @@ if (currentNamespace === 'home') {
   initProjectHeroEffect();
   document.body.style.overflow = 'auto';
 }
+
+//! ========================================
+//! GLOBAL BARBA HOOKS VOOR SCROLL & INTERACTIE MANAGEMENT
+//! ========================================
 
 // Global Barba.js hooks for scroll management and interaction control
 barba.hooks.enter((data) => {
