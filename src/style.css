@@ -253,6 +253,7 @@ html::-webkit-scrollbar {
   .ui-top-left .back-button {
     font-size: 11px; /* Same as other mobile UI elements */
   }
+  }
 }
 
 .ui-top-center {
