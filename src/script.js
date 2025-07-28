@@ -988,6 +988,9 @@ class ProjectHeroEffect {
     this.heroImage = null;
     this.isInitialized = false;
     this.sprite = null;
+    this.currentImageIndex = 0;
+    this.galleryImages = [];
+    this.isTransitioning = false;
   }
 
   async init() {
@@ -997,6 +1000,9 @@ class ProjectHeroEffect {
         console.log('No project hero image found');
         return false;
       }
+
+      // Setup gallery images
+      await this.setupGallery(heroImage);
 
       this.heroImage = heroImage;
 
@@ -1085,6 +1091,9 @@ class ProjectHeroEffect {
       this.app.canvas.style.opacity = '1';
       heroImage.style.opacity = '0';
 
+      // Setup gallery interaction immediately after PIXI is ready
+      this.setupSpriteInteraction();
+
       this.isInitialized = true;
       return true;
 
@@ -1100,9 +1109,391 @@ class ProjectHeroEffect {
     }
   }
 
+  async setupGallery(heroImage) {
+    // Get project number from current page URL to determine which gallery to load
+    const projectNumber = this.getProjectNumber();
+    
+    // Define gallery images per project - simple HTML img src switching
+    const basePath = window.location.hostname === 'localhost' ? './img/project/' : '/portfolio_clean/img/project/';
+    const projectGalleries = {
+      1: [
+        basePath + '51793e_4a8ef5a46faa413c808664a56e668ffc~mv2 1.png',
+        basePath + 'Screenshot 2025-06-16 at 16.24.51 1.png',
+        basePath + 'Screenshot 2025-06-17 at 00.03.55 1.png'
+      ],
+      2: [
+        basePath + 'Screenshot 2025-06-17 at 00.14.29 1.png',
+        basePath + 'Screenshot 2025-06-17 at 00.14.52 1.png',
+        basePath + 'Screenshot 2025-06-17 at 00.15.56 1.png'
+      ],
+      3: [
+        basePath + 'Screenshot 2025-06-17 at 00.16.31 1.png',
+        basePath + 'Screenshot 2025-06-17 at 00.16.56 1.png',
+        basePath + 'Screenshot 2025-06-17 at 00.52.22 1.png'
+      ],
+      // Default fallback for other projects
+      default: [
+        basePath + '51793e_4a8ef5a46faa413c808664a56e668ffc~mv2 1.png',
+        basePath + 'Screenshot 2025-06-16 at 16.24.51 1.png',
+        basePath + 'Screenshot 2025-06-17 at 00.03.55 1.png'
+      ]
+    };
+
+    // Get gallery for current project
+    this.galleryImages = projectGalleries[projectNumber] || projectGalleries.default;
+    this.currentImageIndex = 0;
+    
+    // Gallery will be enabled after scale animation completes
+    this.galleryEnabled = false;
+  }
+
+  getProjectNumber() {
+    // Extract project number from URL (project-1.html -> 1)
+    const path = window.location.pathname;
+    const match = path.match(/project-(\d+)\.html/);
+    return match ? parseInt(match[1]) : 1;
+  }
+
+  setupSpriteInteraction() {
+    // Add multiple interaction handlers to HTML hero image
+    if (this.heroImage) {
+      this.heroImage.style.cursor = 'pointer';
+      
+      // Click handler
+      this.heroImage.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.nextImage();
+      });
+      
+      // Swipe handlers
+      this.setupSwipeHandlers();
+      
+      // Scroll handler
+      this.setupScrollHandler();
+      
+      // Keyboard handlers
+      this.setupKeyboardHandlers();
+    }
+  }
+
+  setupSwipeHandlers() {
+    let startX = 0;
+    let startY = 0;
+    
+    this.heroImage.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    });
+    
+    this.heroImage.addEventListener('touchend', (e) => {
+      if (!this.galleryEnabled) return;
+      
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const diffX = startX - endX;
+      const diffY = startY - endY;
+      
+      // Check if horizontal swipe is dominant
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+        e.preventDefault();
+        if (diffX > 0) {
+          // Swipe left - next image
+          this.nextImage();
+        } else {
+          // Swipe right - previous image
+          this.previousImage();
+        }
+      }
+    });
+  }
+
+  setupScrollHandler() {
+    // Add scroll handler to entire document for project pages
+    this.scrollHandler = (e) => {
+      if (!this.galleryEnabled) return;
+      
+      e.preventDefault();
+      
+      if (e.deltaY > 0) {
+        // Scroll down - next image
+        this.nextImage();
+      } else {
+        // Scroll up - previous image
+        this.previousImage();
+      }
+    };
+    
+    document.addEventListener('wheel', this.scrollHandler, { passive: false });
+  }
+
+  setupKeyboardHandlers() {
+    // Add keyboard navigation when image is focused/active
+    document.addEventListener('keydown', (e) => {
+      if (!this.galleryEnabled) return;
+      
+      switch(e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.previousImage();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          this.nextImage();
+          break;
+      }
+    });
+  }
+
+  enableGallery() {
+    // Called after scale animation completes
+    this.galleryEnabled = true;
+    this.createImageCounter();
+    this.createNavigationArrows();
+    this.updateImageCounter();
+    
+    // Show counter if it was hidden
+    if (this.imageCounter) {
+      this.imageCounter.style.display = 'block';
+    }
+    
+    // Show click areas if they were hidden
+    if (this.leftClickArea) {
+      this.leftClickArea.style.display = 'flex';
+    }
+    if (this.rightClickArea) {
+      this.rightClickArea.style.display = 'flex';
+    }
+  }
+
+  createImageCounter() {
+    // Create counter element in UI top center
+    if (!this.imageCounter) {
+      this.imageCounter = document.createElement('div');
+      this.imageCounter.className = 'gallery-counter';
+      this.imageCounter.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba(0, 0, 0, 0.8);
+        font-size: 18px;
+        padding: 0.5em 1em;
+        pointer-events: none;
+        z-index: 20;
+      `;
+      
+      // Add to UI overlay
+      const uiOverlay = document.querySelector('.ui-overlay');
+      if (uiOverlay) {
+        uiOverlay.appendChild(this.imageCounter);
+      }
+    }
+  }
+
+  updateImageCounter() {
+    if (this.imageCounter && this.galleryImages) {
+      this.imageCounter.textContent = `${this.currentImageIndex + 1}/${this.galleryImages.length}`;
+    }
+  }
+
+  createNavigationArrows() {
+    // Create left click area (previous)
+    if (!this.leftClickArea) {
+      this.leftClickArea = document.createElement('div');
+      this.leftClickArea.className = 'gallery-click-area gallery-click-left';
+      this.leftClickArea.style.cssText = `
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 50%;
+        height: 100vh;
+        background: transparent;
+        cursor: pointer;
+        user-select: none;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding-left: 2em;
+      `;
+      
+      // Create arrow inside click area
+      const leftArrow = document.createElement('div');
+      leftArrow.innerHTML = '←';
+      leftArrow.style.cssText = `
+        font-size: 24px;
+        color: rgba(0, 0, 0, 0.6);
+        transition: color 0.2s ease;
+        pointer-events: none;
+      `;
+      
+      this.leftClickArea.appendChild(leftArrow);
+      this.leftArrow = leftArrow; // Keep reference for styling
+      
+      this.leftClickArea.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.previousImage();
+      });
+      
+      this.leftClickArea.addEventListener('mouseenter', () => {
+        this.leftArrow.style.color = 'rgba(0, 0, 0, 1)';
+      });
+      
+      this.leftClickArea.addEventListener('mouseleave', () => {
+        this.leftArrow.style.color = 'rgba(0, 0, 0, 0.6)';
+      });
+      
+      document.body.appendChild(this.leftClickArea);
+    }
+
+    // Create right click area (next)
+    if (!this.rightClickArea) {
+      this.rightClickArea = document.createElement('div');
+      this.rightClickArea.className = 'gallery-click-area gallery-click-right';
+      this.rightClickArea.style.cssText = `
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 50%;
+        height: 100vh;
+        background: transparent;
+        cursor: pointer;
+        user-select: none;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 2em;
+      `;
+      
+      // Create arrow inside click area
+      const rightArrow = document.createElement('div');
+      rightArrow.innerHTML = '→';
+      rightArrow.style.cssText = `
+        font-size: 24px;
+        color: rgba(0, 0, 0, 0.6);
+        transition: color 0.2s ease;
+        pointer-events: none;
+      `;
+      
+      this.rightClickArea.appendChild(rightArrow);
+      this.rightArrow = rightArrow; // Keep reference for styling
+      
+      this.rightClickArea.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.nextImage();
+      });
+      
+      this.rightClickArea.addEventListener('mouseenter', () => {
+        this.rightArrow.style.color = 'rgba(0, 0, 0, 1)';
+      });
+      
+      this.rightClickArea.addEventListener('mouseleave', () => {
+        this.rightArrow.style.color = 'rgba(0, 0, 0, 0.6)';
+      });
+      
+      document.body.appendChild(this.rightClickArea);
+    }
+  }
+
+  disableGallery() {
+    // Disable gallery during transitions
+    this.galleryEnabled = false;
+    
+    // Hide counter during transitions
+    if (this.imageCounter) {
+      this.imageCounter.style.display = 'none';
+    }
+    
+    // Hide click areas during transitions
+    if (this.leftClickArea) {
+      this.leftClickArea.style.display = 'none';
+    }
+    if (this.rightClickArea) {
+      this.rightClickArea.style.display = 'none';
+    }
+  }
+
+  async nextImage() {
+    if (this.isTransitioning || !this.galleryEnabled || !this.galleryImages.length) return;
+
+    this.isTransitioning = true;
+    
+    // Move to next image (cycle back to 0 when at end)
+    this.currentImageIndex = (this.currentImageIndex + 1) % this.galleryImages.length;
+    
+    this.changeImage();
+  }
+
+  async previousImage() {
+    if (this.isTransitioning || !this.galleryEnabled || !this.galleryImages.length) return;
+
+    this.isTransitioning = true;
+    
+    // Move to previous image (cycle to end when at 0)
+    this.currentImageIndex = this.currentImageIndex === 0 ? 
+      this.galleryImages.length - 1 : 
+      this.currentImageIndex - 1;
+    
+    this.changeImage();
+  }
+
+  changeImage() {
+    // Simple fade transition on HTML img
+    gsap.to(this.heroImage, {
+      opacity: 0.3,
+      duration: 0.2,
+      onComplete: () => {
+        // Change HTML img src
+        this.heroImage.src = this.galleryImages[this.currentImageIndex];
+        
+        // Update counter
+        this.updateImageCounter();
+        
+        // Fade back in
+        gsap.to(this.heroImage, {
+          opacity: 1,
+          duration: 0.2,
+          onComplete: () => {
+            this.isTransitioning = false;
+          }
+        });
+      }
+    });
+  }
 
   destroy() {
     try {
+      // Remove image counter
+      if (this.imageCounter && this.imageCounter.parentNode) {
+        this.imageCounter.parentNode.removeChild(this.imageCounter);
+        this.imageCounter = null;
+      }
+      
+      // Remove navigation click areas
+      if (this.leftClickArea && this.leftClickArea.parentNode) {
+        this.leftClickArea.parentNode.removeChild(this.leftClickArea);
+        this.leftClickArea = null;
+        this.leftArrow = null;
+      }
+      if (this.rightClickArea && this.rightClickArea.parentNode) {
+        this.rightClickArea.parentNode.removeChild(this.rightClickArea);
+        this.rightClickArea = null;
+        this.rightArrow = null;
+      }
+      
+      // Remove scroll handler from document
+      if (this.scrollHandler) {
+        document.removeEventListener('wheel', this.scrollHandler);
+        this.scrollHandler = null;
+      }
+      
+      // Remove click handler from hero image
+      if (this.heroImage) {
+        this.heroImage.style.cursor = '';
+        this.heroImage.removeEventListener('click', this.nextImage);
+      }
+
       // Remove canvas from DOM
       if (this.app && this.app.canvas && this.app.canvas.parentNode) {
         this.app.canvas.parentNode.removeChild(this.app.canvas);
@@ -1131,6 +1522,7 @@ class ProjectHeroEffect {
       this.displacementSprite = null;
       this.displacementFilter = null;
       this.sprite = null;
+      this.galleryImages = null;
       this.isInitialized = false;
     } catch (error) {
       console.error('Failed to destroy project hero effect:', error);
@@ -1239,9 +1631,20 @@ async function initSliderWithIntro() {
 }
 
 async function initProjectHeroEffect() {
-  if (!projectHeroEffect) {
-    projectHeroEffect = new ProjectHeroEffect();
-    await projectHeroEffect.init();
+  // Always destroy existing instance first to ensure clean state
+  if (projectHeroEffect) {
+    projectHeroEffect.destroy();
+    projectHeroEffect = null;
+  }
+  
+  // Create fresh instance
+  projectHeroEffect = new ProjectHeroEffect();
+  
+  const success = await projectHeroEffect.init();
+  
+  if (success) {
+    // Make sure global reference is set
+    window.projectHeroEffect = projectHeroEffect;
   }
 }
 
@@ -1291,6 +1694,11 @@ barba.init({
       await initProjectHeroEffect();
     },
     leave(data) {
+      // Disable gallery during transition to prevent PIXI conflicts
+      if (window.projectHeroEffect) {
+        window.projectHeroEffect.disableGallery();
+      }
+      
       // Disable wheel events to prevent scroll blocking
       if (slider && !store.isDevice) {
         window.removeEventListener('wheel', slider.onWheel);
@@ -1363,7 +1771,15 @@ barba.init({
             scale: 1.5,
             duration: 1.8,
             ease: "power2.out",
-            transformOrigin: "center center"
+            transformOrigin: "center center",
+            onComplete: () => {
+              // Add extra delay to ensure PIXI errors are finished
+              setTimeout(() => {
+                if (projectHeroEffect) {
+                  projectHeroEffect.enableGallery();
+                }
+              }, 500); // Wait for PIXI to stabilize
+            }
           });
         }, 100); // Small delay to ensure position is reset
       } else {
@@ -1378,7 +1794,15 @@ barba.init({
               scale: 1.5,
               duration: 1.8,
               ease: "power2.out",
-              transformOrigin: "center center"
+              transformOrigin: "center center",
+              onComplete: () => {
+                // Add extra delay to ensure PIXI errors are finished
+                setTimeout(() => {
+                  if (projectHeroEffect) {
+                    projectHeroEffect.enableGallery();
+                  }
+                }, 500); // Wait for PIXI to stabilize
+              }
             });
           }, 100);
         }
@@ -1416,6 +1840,11 @@ barba.init({
       namespace: 'home'
     },
     leave(data) {
+      // Disable gallery during transition to prevent PIXI conflicts
+      if (window.projectHeroEffect) {
+        window.projectHeroEffect.disableGallery();
+      }
+      
       // Clean up transition image
       if (window.transitionImage) {
         window.transitionImage.remove();
@@ -1468,7 +1897,15 @@ if (currentNamespace === 'home') {
         scale: 1.5,
         duration: 1.8,
         ease: "power2.out",
-        transformOrigin: "center center"
+        transformOrigin: "center center",
+        onComplete: () => {
+          // Add extra delay to ensure PIXI errors are finished
+          setTimeout(() => {
+            if (projectHeroEffect) {
+              projectHeroEffect.enableGallery();
+            }
+          }, 500); // Wait for PIXI to stabilize
+        }
       });
     }
   }, 500); // Longer delay for direct page load
