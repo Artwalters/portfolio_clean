@@ -1187,11 +1187,31 @@ barba.init({
         heroImg.style.height = '';
         heroImg.style.zIndex = '';
         heroImg.style.transform = '';
+        
+        // Start scale animation after position reset
+        setTimeout(() => {
+          gsap.to(heroImg, {
+            scale: 1.5,
+            duration: 1.8,
+            ease: "power2.out",
+            transformOrigin: "center center"
+          });
+        }, 100); // Small delay to ensure position is reset
       } else {
         // Fallback if no transition image
         if (heroImg) {
           heroImg.style.opacity = '1';
           heroImg.style.transform = 'scale(1)';
+          
+          // Start scale animation for fallback case too
+          setTimeout(() => {
+            gsap.to(heroImg, {
+              scale: 1.5,
+              duration: 1.8,
+              ease: "power2.out",
+              transformOrigin: "center center"
+            });
+          }, 100);
         }
         data.next.container.style.opacity = '1';
       }
@@ -1270,6 +1290,19 @@ if (currentNamespace === 'home') {
   // Initialize project hero effect
   initProjectHeroEffect();
   document.body.style.overflow = 'auto';
+  
+  // Add scale animation for direct page load (not from transition)
+  setTimeout(() => {
+    const heroImg = document.querySelector('.project-hero-image');
+    if (heroImg) {
+      gsap.to(heroImg, {
+        scale: 1.5,
+        duration: 1.8,
+        ease: "power2.out",
+        transformOrigin: "center center"
+      });
+    }
+  }, 500); // Longer delay for direct page load
 }
 
 //! ========================================
