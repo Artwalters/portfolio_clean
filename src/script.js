@@ -59,7 +59,9 @@ class SimplePixiSlider {
       on: { x: 0, y: 0 },
       off: 0,
       flags: { dragging: false },
-      isVertical: store.isDevice // Mobile = vertical, Desktop = horizontal
+      isVertical: store.isDevice, // Mobile = vertical, Desktop = horizontal
+      clickStart: { x: 0, y: 0, time: 0 },
+      hasMoved: false
     };
 
     this.items = [];
@@ -300,7 +302,8 @@ class SimplePixiSlider {
         // Add hover and click events
         sprite.on('pointerover', () => this.onProjectHover(i));
         sprite.on('pointerout', () => this.onProjectOut(i));
-        sprite.on('pointerdown', () => this.onProjectClick(i));
+        sprite.on('pointerdown', (e) => this.onProjectDown(i, e));
+        sprite.on('pointerup', (e) => this.onProjectUp(i, e));
         
         this.container.addChild(sprite);
         
@@ -439,11 +442,17 @@ class SimplePixiSlider {
     if (this.expandedIndex !== null || this.isAnimating) return;
     
     const { x, y } = this.getPos(e);
-    const { flags, on } = this.state;
+    const { flags, on, clickStart } = this.state;
     
     flags.dragging = true;
     on.x = x;
     on.y = y;
+    
+    // Store click start position and time for click detection
+    clickStart.x = x;
+    clickStart.y = y;
+    clickStart.time = Date.now();
+    this.state.hasMoved = false;
     
     // Sync off position with current state to prevent jumping
     this.state.off = this.state.target;
@@ -466,9 +475,20 @@ class SimplePixiSlider {
     
     if (!state.flags.dragging) return;
 
-    const { off, on } = state;
+    const { off, on, clickStart } = state;
     const moveX = x - on.x;
     const moveY = y - on.y;
+    
+    // Calculate distance from start position to detect movement
+    const distanceFromStart = Math.sqrt(
+      Math.pow(x - clickStart.x, 2) + Math.pow(y - clickStart.y, 2)
+    );
+    
+    // Mark as moved if distance is significant (prevents accidental clicks)
+    const moveThreshold = store.isDevice ? 10 : 5; // Higher threshold on mobile
+    if (distanceFromStart > moveThreshold) {
+      state.hasMoved = true;
+    }
 
     if (store.isDevice) {
       // Mobile: vertical scrolling
@@ -573,9 +593,34 @@ class SimplePixiSlider {
   //! 5. IMAGE EXPAND/COLLAPSE ANIMATIES
   //! ========================================
 
-  onProjectClick(index) {
-    if (this.isAnimating) return;
+  onProjectDown(index, e) {
+    // Store which sprite was pressed for potential click
+    this.state.pressedSpriteIndex = index;
+  }
+  
+  onProjectUp(index, e) {
+    // Only trigger click if:
+    // 1. Same sprite that was pressed down
+    // 2. No significant movement occurred
+    // 3. Not too much time has passed (prevents long press)
+    // 4. Not currently animating
     
+    if (this.isAnimating) return;
+    if (this.state.pressedSpriteIndex !== index) return;
+    
+    const timeDiff = Date.now() - this.state.clickStart.time;
+    const maxClickTime = 500; // Max 500ms for a valid click
+    
+    if (!this.state.hasMoved && timeDiff < maxClickTime) {
+      // Valid click detected!
+      this.onProjectClick(index);
+    }
+    
+    // Reset pressed sprite
+    this.state.pressedSpriteIndex = null;
+  }
+
+  onProjectClick(index) {
     if (this.expandedIndex === index) {
       // If clicking the already expanded image, collapse all
       this.collapseAll();
