@@ -251,8 +251,8 @@ html::-webkit-scrollbar {
   }
   
   .ui-top-left .back-button {
-    font-size: 11px; /* Same as other mobile UI elements */
-  }
+    font-size: 11px; /* Same as mobile ui-overlay > div, NOT ui-top-left */
+    padding: 0.5em 1em; /* Based on 11px font-size on mobile */
   }
 }
 
@@ -421,15 +421,21 @@ html::-webkit-scrollbar {
 
 /* Project Detail Page Styles */
 .ui-top-left .back-button {
+    /* Same styling as ui-overlay > div (like other UI elements) */
     color: rgba(0, 0, 0, 0.8);
     text-decoration: none;
-    font-size: 18px; /* Same as other UI elements */
+    font-size: 18px; /* Same as other UI elements, NOT ui-top-left size */
     font-weight: 300;
     letter-spacing: 0.5px;
     text-transform: lowercase;
     transition: opacity 0.3s ease;
     pointer-events: all; /* Enable clicking despite ui-overlay pointer-events: none */
     display: inline-block;
+    /* Reset positioning to match other UI elements */
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0.5em 1em; /* Based on 18px font-size, not 28px */
 }
 
 .ui-top-left .back-button:hover {
