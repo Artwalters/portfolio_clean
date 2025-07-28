@@ -416,14 +416,13 @@ html::-webkit-scrollbar {
 
 /* Project Detail Page Styles */
 .back-button {
-    position: fixed;
-    top: 60px;
-    left: 60px;
     color: rgba(0, 0, 0, 0.8);
     text-decoration: none;
     font-size: 18px;
-    z-index: 100;
-    transition: opacity 0.3s;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+    text-transform: lowercase;
+    transition: opacity 0.3s ease;
 }
 
 .back-button:hover {
@@ -441,7 +440,11 @@ html::-webkit-scrollbar {
 /* Scrollable project page layout */
 .project-content {
     width: 100%;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
 }
 
 .project-hero {
@@ -470,12 +473,9 @@ html::-webkit-scrollbar {
     }
 }
 
-/* Project details section */
+/* Project details section - hidden for fixed layout */
 .project-details {
-    background: #fff;
-    padding: 0.5em 1em;
-    max-width: 1200px;
-    margin: 0 auto;
+    display: none;
 }
 
 .project-title {

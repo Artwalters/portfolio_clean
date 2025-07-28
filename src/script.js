@@ -106,19 +106,23 @@ class SimplePixiSlider {
       width: store.ww,
       height: store.wh,
       backgroundAlpha: 0,
-      antialias: !store.isDevice, // Disable on mobile for performance
-      resolution: store.isDevice ? 1 : (window.devicePixelRatio || 1),
+      antialias: true, // Enable antialiasing for both mobile and desktop
+      resolution: window.devicePixelRatio || 1, // Use device pixel ratio for all devices
       autoDensity: true
     });
 
-    // Add canvas to DOM
+    // Add canvas to DOM with pixel-perfect rendering
     this.app.canvas.style.position = 'fixed';
     this.app.canvas.style.top = '0';
     this.app.canvas.style.left = '0';
     this.app.canvas.style.width = '100%';
     this.app.canvas.style.height = '100%';
-    this.app.canvas.style.pointerEvents = 'auto'; // Changed from 'none' to 'auto'
+    this.app.canvas.style.pointerEvents = 'auto';
     this.app.canvas.style.zIndex = '1';
+    // Optimize canvas rendering for crisp images
+    this.app.canvas.style.imageRendering = 'pixelated';
+    this.app.canvas.style.imageRendering = '-moz-crisp-edges';
+    this.app.canvas.style.imageRendering = 'crisp-edges';
     document.body.appendChild(this.app.canvas);
 
     // Create container for slides
@@ -973,8 +977,8 @@ class ProjectHeroEffect {
         height: displayHeight,
         backgroundColor: 0x000000,
         backgroundAlpha: 0,
-        antialias: !store.isDevice,
-        resolution: store.isDevice ? 1 : (window.devicePixelRatio || 1)
+        antialias: true, // Enable antialiasing for project hero images too
+        resolution: window.devicePixelRatio || 1 // Use device pixel ratio
       });
 
       // Create sprite from image - preload texture
@@ -1192,8 +1196,8 @@ barba.init({
       return gsap.timeline(); // Empty timeline - no animations
     },
     enter(data) {
-      // Enable scrolling immediately
-      document.body.style.overflow = 'auto';
+      // Disable scrolling for fixed project layout
+      document.body.style.overflow = 'hidden';
       
       // Get elements
       const heroImg = data.next.container.querySelector('.project-hero-image');
@@ -1264,8 +1268,8 @@ barba.init({
       return gsap.timeline(); // Empty timeline - no animations
     },
     async afterEnter() {
-      // KEEP SCROLLING ENABLED on project page
-      document.body.style.overflow = 'auto';
+      // KEEP SCROLLING DISABLED on project page for fixed layout
+      document.body.style.overflow = 'hidden';
       
       // Clean up PIXI canvas from slider
       const canvas = document.querySelector('canvas');
@@ -1334,7 +1338,7 @@ if (currentNamespace === 'home') {
 } else if (currentNamespace === 'project') {
   // Initialize project hero effect
   initProjectHeroEffect();
-  document.body.style.overflow = 'auto';
+  document.body.style.overflow = 'hidden'; // Fixed layout - no scrolling
   
   // Add scale animation for direct page load (not from transition)
   setTimeout(() => {
