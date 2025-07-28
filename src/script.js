@@ -1117,25 +1117,25 @@ class ProjectHeroEffect {
     const basePath = window.location.hostname === 'localhost' ? './img/project/' : './img/project/';
     const projectGalleries = {
       1: [
-        basePath + '51793e_4a8ef5a46faa413c808664a56e668ffc~mv2 1.png',
-        basePath + 'Screenshot 2025-06-16 at 16.24.51 1.png',
-        basePath + 'Screenshot 2025-06-17 at 00.03.55 1.png'
+        basePath + encodeURIComponent('51793e_4a8ef5a46faa413c808664a56e668ffc~mv2 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-16 at 16.24.51 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.03.55 1.png')
       ],
       2: [
-        basePath + 'Screenshot 2025-06-17 at 00.14.29 1.png',
-        basePath + 'Screenshot 2025-06-17 at 00.14.52 1.png',
-        basePath + 'Screenshot 2025-06-17 at 00.15.56 1.png'
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.14.29 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.14.52 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.15.56 1.png')
       ],
       3: [
-        basePath + 'Screenshot 2025-06-17 at 00.16.31 1.png',
-        basePath + 'Screenshot 2025-06-17 at 00.16.56 1.png',
-        basePath + 'Screenshot 2025-06-17 at 00.52.22 1.png'
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.16.31 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.16.56 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.52.22 1.png')
       ],
       // Default fallback for other projects
       default: [
-        basePath + '51793e_4a8ef5a46faa413c808664a56e668ffc~mv2 1.png',
-        basePath + 'Screenshot 2025-06-16 at 16.24.51 1.png',
-        basePath + 'Screenshot 2025-06-17 at 00.03.55 1.png'
+        basePath + encodeURIComponent('51793e_4a8ef5a46faa413c808664a56e668ffc~mv2 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-16 at 16.24.51 1.png'),
+        basePath + encodeURIComponent('Screenshot 2025-06-17 at 00.03.55 1.png')
       ]
     };
 
