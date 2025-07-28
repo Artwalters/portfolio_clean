@@ -1114,7 +1114,7 @@ class ProjectHeroEffect {
     const projectNumber = this.getProjectNumber();
     
     // Define gallery images per project - simple HTML img src switching
-    const basePath = window.location.hostname === 'localhost' ? './img/project/' : '/portfolio_clean/img/project/';
+    const basePath = window.location.hostname === 'localhost' ? './img/project/' : './img/project/';
     const projectGalleries = {
       1: [
         basePath + '51793e_4a8ef5a46faa413c808664a56e668ffc~mv2 1.png',
@@ -1297,7 +1297,7 @@ class ProjectHeroEffect {
   }
 
   createNavigationArrows() {
-    // Create left click area (previous)
+    // Create left click area (previous) - invisible
     if (!this.leftClickArea) {
       this.leftClickArea = document.createElement('div');
       this.leftClickArea.className = 'gallery-click-area gallery-click-left';
@@ -1311,42 +1311,17 @@ class ProjectHeroEffect {
         cursor: pointer;
         user-select: none;
         z-index: 1;
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        padding-left: 2em;
       `;
-      
-      // Create arrow inside click area
-      const leftArrow = document.createElement('div');
-      leftArrow.innerHTML = '←';
-      leftArrow.style.cssText = `
-        font-size: 24px;
-        color: rgba(0, 0, 0, 0.6);
-        transition: color 0.2s ease;
-        pointer-events: none;
-      `;
-      
-      this.leftClickArea.appendChild(leftArrow);
-      this.leftArrow = leftArrow; // Keep reference for styling
       
       this.leftClickArea.addEventListener('click', (e) => {
         e.preventDefault();
         this.previousImage();
       });
       
-      this.leftClickArea.addEventListener('mouseenter', () => {
-        this.leftArrow.style.color = 'rgba(0, 0, 0, 1)';
-      });
-      
-      this.leftClickArea.addEventListener('mouseleave', () => {
-        this.leftArrow.style.color = 'rgba(0, 0, 0, 0.6)';
-      });
-      
       document.body.appendChild(this.leftClickArea);
     }
 
-    // Create right click area (next)
+    // Create right click area (next) - invisible
     if (!this.rightClickArea) {
       this.rightClickArea = document.createElement('div');
       this.rightClickArea.className = 'gallery-click-area gallery-click-right';
@@ -1360,36 +1335,11 @@ class ProjectHeroEffect {
         cursor: pointer;
         user-select: none;
         z-index: 1;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        padding-right: 2em;
       `;
-      
-      // Create arrow inside click area
-      const rightArrow = document.createElement('div');
-      rightArrow.innerHTML = '→';
-      rightArrow.style.cssText = `
-        font-size: 24px;
-        color: rgba(0, 0, 0, 0.6);
-        transition: color 0.2s ease;
-        pointer-events: none;
-      `;
-      
-      this.rightClickArea.appendChild(rightArrow);
-      this.rightArrow = rightArrow; // Keep reference for styling
       
       this.rightClickArea.addEventListener('click', (e) => {
         e.preventDefault();
         this.nextImage();
-      });
-      
-      this.rightClickArea.addEventListener('mouseenter', () => {
-        this.rightArrow.style.color = 'rgba(0, 0, 0, 1)';
-      });
-      
-      this.rightClickArea.addEventListener('mouseleave', () => {
-        this.rightArrow.style.color = 'rgba(0, 0, 0, 0.6)';
       });
       
       document.body.appendChild(this.rightClickArea);
@@ -1474,12 +1424,10 @@ class ProjectHeroEffect {
       if (this.leftClickArea && this.leftClickArea.parentNode) {
         this.leftClickArea.parentNode.removeChild(this.leftClickArea);
         this.leftClickArea = null;
-        this.leftArrow = null;
       }
       if (this.rightClickArea && this.rightClickArea.parentNode) {
         this.rightClickArea.parentNode.removeChild(this.rightClickArea);
         this.rightClickArea = null;
-        this.rightArrow = null;
       }
       
       // Remove scroll handler from document
