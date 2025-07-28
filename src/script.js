@@ -567,6 +567,12 @@ class SimplePixiSlider {
   }
 
   onProjectHover(index) {
+    // Clear any pending fade in timeout
+    if (this.fadeTimeout) {
+      clearTimeout(this.fadeTimeout);
+      this.fadeTimeout = null;
+    }
+    
     // Clear any pending hide timeout
     if (this.hoverTimeout) {
       clearTimeout(this.hoverTimeout);
@@ -578,13 +584,32 @@ class SimplePixiSlider {
       this.ui.projectItems[index].classList.add('highlighted');
     }
     
-    // Start fade in after delay (shorter on mobile for better UX)
-    const delay = store.isDevice ? 500 : 1000;
+    // Always ensure fade-out happens first
+    if (this.ui.projectDescription) {
+      this.ui.projectDescription.classList.remove('visible');
+    }
+    
+    // Wait for fade-out to complete, then wait additional delay before fade-in
+    const fadeOutDelay = 200; // Time for CSS transition to complete
+    const hoverDelay = store.isDevice ? 500 : 1000; // Original hover delay
+    const totalDelay = fadeOutDelay + hoverDelay;
+    
     this.fadeTimeout = setTimeout(() => {
       if (this.ui.projectDescription) {
+        const projectNames = [
+          "Project 1 - Creative Visual Identity",
+          "Project 2 - Interactive Web Experience", 
+          "Project 3 - Brand Strategy & Design",
+          "Project 4 - Digital Art Installation",
+          "Project 5 - Motion Graphics Campaign",
+          "Project 6 - Editorial Design System",
+          "Project 7 - Experimental Typography"
+        ];
+        
+        this.ui.projectDescription.textContent = projectNames[index] || "Project details";
         this.ui.projectDescription.classList.add('visible');
       }
-    }, delay);
+    }, totalDelay);
   }
 
   onProjectOut(index) {
@@ -599,8 +624,9 @@ class SimplePixiSlider {
       this.ui.projectItems[index].classList.remove('highlighted');
     }
     
-    // Fade out immediately
+    // Reset description and fade out
     if (this.ui.projectDescription) {
+      this.ui.projectDescription.textContent = "Project details appear on hover.";
       this.ui.projectDescription.classList.remove('visible');
     }
   }
