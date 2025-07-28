@@ -415,10 +415,10 @@ html::-webkit-scrollbar {
 }
 
 /* Project Detail Page Styles */
-.back-button {
+.ui-top-left .back-button {
     color: rgba(0, 0, 0, 0.8);
     text-decoration: none;
-    font-size: 18px;
+    font-size: inherit; /* Inherit font size from ui-top-left */
     font-weight: 300;
     letter-spacing: 0.5px;
     text-transform: lowercase;
@@ -427,7 +427,7 @@ html::-webkit-scrollbar {
     display: inline-block;
 }
 
-.back-button:hover {
+.ui-top-left .back-button:hover {
     opacity: 0.6;
 }
 
