@@ -445,6 +445,12 @@ class SimplePixiSlider {
     // Prevent dragging when expanded
     if (this.expandedIndex !== null || this.isAnimating) return;
     
+    // Interrupt intro animation if still running
+    if (this.introAnimation && this.introAnimation.isActive()) {
+      this.introAnimation.kill();
+      this.introAnimation = null;
+    }
+    
     const { x, y } = this.getPos(e);
     const { flags, on, clickStart } = this.state;
     
@@ -516,6 +522,12 @@ class SimplePixiSlider {
     
     // Prevent scrolling when expanded
     if (this.expandedIndex !== null || this.isAnimating) return;
+    
+    // Interrupt intro animation if still running
+    if (this.introAnimation && this.introAnimation.isActive()) {
+      this.introAnimation.kill();
+      this.introAnimation = null;
+    }
     
     const state = this.state;
     const wheelSpeed = 15; // Even lower sensitivity for more relaxed feel
@@ -1118,6 +1130,88 @@ function initSlider() {
   }
 }
 
+async function initSliderWithIntro() {
+  // Create white loading overlay
+  const loadingOverlay = document.createElement('div');
+  loadingOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    z-index: 10000;
+    pointer-events: none;
+  `;
+  document.body.appendChild(loadingOverlay);
+  
+  // Initialize slider
+  const sliderEl = document.querySelector('.js-slider');
+  if (sliderEl && !slider) {
+    slider = new SimplePixiSlider(sliderEl);
+    ticker = () => slider.render();
+    gsap.ticker.add(ticker);
+    
+    // Wait for slider to be ready
+    await new Promise(resolve => {
+      const checkReady = () => {
+        if (slider && slider.items && slider.items.length > 0) {
+          resolve();
+        } else {
+          requestAnimationFrame(checkReady);
+        }
+      };
+      checkReady();
+    });
+    
+    // Calculate proper intro distance - multiple loops for dramatic effect
+    const isVertical = store.isDevice;
+    const containerSize = isVertical ? slider.getContainerHeight() : slider.getContainerWidth();
+    const introDistance = containerSize * 2.5; // Start much further back for multiple loops
+    
+    // Set initial positions - current starts at intro distance, target will be animated
+    slider.state.current = -introDistance;
+    slider.state.target = -introDistance; // Start both at same position
+    
+    // Start intro timeline
+    const introTl = gsap.timeline();
+    
+    // Store reference to target animation for interruption
+    const targetAnimation = gsap.to(slider.state, {
+      target: 0, // Only animate target, not current
+      duration: 2.5, // 2.5 seconds duration
+      ease: "power4.out", // More extreme easing - very fast start, very slow end
+    });
+    
+    // Add target animation to timeline
+    introTl.add(targetAnimation, 0);
+    
+    // Fade out loading overlay after 0.3 seconds
+    introTl.to(loadingOverlay, {
+      opacity: 0,
+      duration: 0.8,
+      ease: "power2.out",
+      onComplete: () => {
+        loadingOverlay.remove();
+      }
+    }, 0.3);
+    
+    // Add opacity fade-in for slider
+    const domGl = document.querySelector('.dom-gl');
+    if (domGl) {
+      domGl.style.opacity = '0';
+      introTl.to(domGl, {
+        opacity: 1,
+        duration: 1,
+        ease: "power2.out"
+      }, 0.3);
+    }
+    
+    // Store animation reference for interruption
+    slider.introAnimation = targetAnimation;
+  }
+}
+
 async function initProjectHeroEffect() {
   if (!projectHeroEffect) {
     projectHeroEffect = new ProjectHeroEffect();
@@ -1316,8 +1410,8 @@ barba.init({
       // Destroy project hero effect
       await destroyProjectHeroEffect();
       
-      // Initialize slider
-      initSlider();
+      // Initialize slider with intro animation
+      initSliderWithIntro();
       
       return gsap.timeline(); // No animations
     }
@@ -1332,8 +1426,8 @@ barba.init({
 const currentNamespace = document.querySelector('[data-barba-namespace]')?.getAttribute('data-barba-namespace');
 
 if (currentNamespace === 'home') {
-  // Initialize slider
-  initSlider();
+  // Initialize slider with intro animation
+  initSliderWithIntro();
   document.body.style.overflow = 'hidden';
 } else if (currentNamespace === 'project') {
   // Initialize project hero effect
